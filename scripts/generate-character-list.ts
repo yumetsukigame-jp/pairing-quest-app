@@ -14,7 +14,7 @@ function run() {
 
   const webpFiles = files
     .filter((f) => f.toLowerCase().endsWith(".webp"))
-    .map((f) => `/Character/${f}`);
+    .map((f) => `/character/${f}`);
 
   fs.writeFileSync(OUTPUT_JSON, JSON.stringify(webpFiles, null, 2));
 
