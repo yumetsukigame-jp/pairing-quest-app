@@ -3,15 +3,16 @@ import { getFirestore } from "firebase/firestore";
 import { getAuth } from "firebase/auth";
 
 const firebaseConfig = {
-  apiKey: "AIzaSyDaoJLk44JYOQkij3XF_OUoui2cqjQLP_k",
-  authDomain: "point-app-1f854.firebaseapp.com",
-  projectId: "point-app-1f854",
-  storageBucket: "point-app-1f854.firebasestorage.app",
-  messagingSenderId: "892402029397",
-  appId: "1:892402029397:web:d58294a612406c47ce95dc"
+  apiKey: "AIzaSyAtIFvUAFcTQf7z_yf4eKyP2mR6LNDnlaQ",
+  authDomain: "pairing-quest-app.firebaseapp.com",
+  projectId: "pairing-quest-app",
+  storageBucket: "pairing-quest-app.appspot.com",
+  messagingSenderId: "143367116192",
+  appId: "1:143367116192:web:c1b8d5444d7881511680c5"
 };
 
 const app = !getApps().length ? initializeApp(firebaseConfig) : getApps()[0];
 
 export const db = getFirestore(app);
 export const auth = getAuth(app);
+export { app };

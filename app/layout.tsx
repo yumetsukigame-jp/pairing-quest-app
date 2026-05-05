@@ -15,8 +15,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "ゆめつきの書斎",
-  description: "ゆめつきの小さな書斎サイト",
+  title: "PairingQuest",
+  description: "ペアでクエストを楽しむアプリ",
 };
 
 export default function RootLayout({

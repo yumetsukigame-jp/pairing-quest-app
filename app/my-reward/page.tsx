@@ -1,15 +1,42 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { db, auth } from "../../firebase";
-import { doc, getDoc } from "firebase/firestore";
+import { db, auth } from "@/firebase";
+import {
+  collection,
+  query,
+  where,
+  getDocs,
+  orderBy,
+  updateDoc,
+  doc,
+} from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 
 export default function MyRewardPage() {
-  const [reward, setReward] = useState<any>(null);
+  const [history, setHistory] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState<
+    "all" | "thisMonth" | "lastMonth" | "approved" | "pending" | "canceled"
+  >("all");
+
   const router = useRouter();
+
+  const fetchHistory = async (uid: string) => {
+    const ref = collection(db, "shippingHistory");
+    const q = query(
+      ref,
+      where("uid", "==", uid),
+      orderBy("requestedAt", "desc")
+    );
+
+    const snap = await getDocs(q);
+    const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    setHistory(list);
+    setLoading(false);
+  };
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (user) => {
@@ -17,110 +44,171 @@ export default function MyRewardPage() {
         router.push("/login");
         return;
       }
-
-      const uid = user.uid;
-
-      // ユーザーが選んだ発送物を取得
-      const ref = doc(db, "selectedRewards", uid);
-      const snap = await getDoc(ref);
-
-      if (snap.exists()) {
-        setReward(snap.data());
-      } else {
-        setReward(null);
-      }
-
-      setLoading(false);
+      fetchHistory(user.uid);
     });
 
     return () => unsub();
   }, []);
 
-  if (loading) return <p style={{ padding: 20 }}>読み込み中…</p>;
+  const handleCancel = async (id: string) => {
+    if (!confirm("この申請をキャンセルしますか？")) return;
 
-  if (!reward) {
-    return (
-      <div style={{ padding: "20px", textAlign: "center" }}>
-        <h2>まだ発送物を選んでいません。</h2>
-        <a
-          href="/reward"
-          style={{
-            marginTop: "20px",
-            display: "inline-block",
-            padding: "10px 16px",
-            background: "#4f46e5",
-            color: "white",
-            borderRadius: "8px",
-            textDecoration: "none",
-          }}
-        >
-          発送物を選ぶ
-        </a>
-      </div>
-    );
-  }
+    await updateDoc(doc(db, "shippingHistory", id), {
+      canceled: true,
+      canceledAt: new Date(),
+    });
+
+    alert("キャンセルしました");
+    const user = auth.currentUser;
+    if (user) fetchHistory(user.uid);
+  };
+
+  if (loading) return <div className="p-6 text-center">読み込み中…</div>;
+
+  // 🔥 フィルター処理
+  const filtered = history.filter((item) => {
+    const date = item.requestedAt?.toDate
+      ? item.requestedAt.toDate()
+      : null;
+    if (!date) return false;
+
+    const now = new Date();
+    const month = date.getMonth();
+    const year = date.getFullYear();
+
+    const currentMonth = now.getMonth();
+    const currentYear = now.getFullYear();
+    const lastMonth = currentMonth === 0 ? 11 : currentMonth - 1;
+    const lastMonthYear = currentMonth === 0 ? currentYear - 1 : currentYear;
+
+    if (filter === "thisMonth") {
+      return month === currentMonth && year === currentYear;
+    }
+    if (filter === "lastMonth") {
+      return month === lastMonth && year === lastMonthYear;
+    }
+    if (filter === "approved") return item.shipped;
+    if (filter === "pending") return !item.shipped && !item.canceled;
+    if (filter === "canceled") return item.canceled;
+
+    return true;
+  });
 
   return (
-    <div style={{ padding: "20px", maxWidth: "600px", margin: "0 auto" }}>
-      <h1 style={{ fontSize: "24px", marginBottom: "20px" }}>
-        選択した発送物
-      </h1>
+    <div className="max-w-xl mx-auto p-6 space-y-6">
+      <h1 className="text-2xl font-bold text-center">報酬申請履歴</h1>
 
-      <div
-        style={{
-          border: "1px solid #ddd",
-          borderRadius: "8px",
-          padding: "16px",
-        }}
-      >
-        {/* 画像表示 */}
-        {reward.image && (
-          <img
-            src={reward.image}
-            alt={reward.name}
-            style={{
-              width: "120px",
-              height: "120px",
-              objectFit: "contain",
-              marginBottom: "16px",
-            }}
-          />
-        )}
+      {/* 🔥 フィルター */}
+      <div className="flex flex-wrap gap-2 justify-center mb-4">
+        {[
+          "all",
+          "thisMonth",
+          "lastMonth",
+          "approved",
+          "pending",
+          "canceled",
+        ].map((f) => (
+          <button
+            key={f}
+            onClick={() => setFilter(f as any)}
+            className={`px-3 py-1 rounded-lg ${
+              filter === f
+                ? "bg-indigo-600 text-white"
+                : "bg-slate-200 text-slate-700"
+            }`}
+          >
+            {{
+              all: "全期間",
+              thisMonth: "今月",
+              lastMonth: "先月",
+              approved: "承認済み",
+              pending: "未承認",
+              canceled: "キャンセル済み",
+            }[f]}
+          </button>
+        ))}
+      </div>
 
-        <p>
-          <strong>発送物：</strong> {reward.name}
-        </p>
-        <p>
-          <strong>必要ポイント：</strong> {reward.cost} pt
-        </p>
-        <p>
-          <strong>選択日時：</strong>{" "}
-          {reward.timestamp?.toDate().toLocaleString()}
-        </p>
+      {filtered.length === 0 && (
+        <p className="text-center text-slate-500">該当する履歴がありません。</p>
+      )}
 
-        {reward.shipped ? (
-          <p style={{ color: "green", marginTop: "10px" }}>
-            <strong>発送済み：</strong>{" "}
-            {reward.shippedAt?.toDate().toLocaleString()}
-          </p>
-        ) : (
-          <p style={{ color: "red", marginTop: "10px" }}>
-            <strong>発送状況：</strong> 未発送
-          </p>
-        )}
+      <div className="space-y-4">
+        {filtered.map((item) => (
+          <div
+            key={item.id}
+            className="p-4 border rounded-xl bg-white space-y-3"
+          >
+            {/* 画像 */}
+            {item.image && (
+              <Image
+                src={item.image}
+                alt={item.name}
+                width={120}
+                height={120}
+                className="rounded-lg object-contain mx-auto"
+              />
+            )}
+
+            <p className="font-semibold text-center">{item.name}</p>
+
+            {/* fixed / variable */}
+            {item.variableAmount ? (
+              <p className="text-center text-slate-600">
+                申請ポイント：{item.variableAmount} pt
+              </p>
+            ) : (
+              <p className="text-center text-slate-600">
+                必要ポイント：{item.cost} pt
+              </p>
+            )}
+
+            <p className="text-center text-slate-500">
+              申請日時：
+              {item.requestedAt?.toDate
+                ? item.requestedAt.toDate().toLocaleString()
+                : ""}
+            </p>
+
+            {/* 承認状態 */}
+            {item.shipped ? (
+              <p className="text-green-600 font-semibold text-center">
+                ✔ 承認済み（
+                {item.approvedAt?.toDate
+                  ? item.approvedAt.toDate().toLocaleString()
+                  : ""}
+                ）
+              </p>
+            ) : item.canceled ? (
+              <p className="text-slate-500 font-semibold text-center">
+                キャンセル済み（
+                {item.canceledAt?.toDate
+                  ? item.canceledAt.toDate().toLocaleString()
+                  : ""}
+                ）
+              </p>
+            ) : (
+              <p className="text-red-600 font-semibold text-center">
+                承認待ち
+              </p>
+            )}
+
+            {/* 🔥 キャンセルボタン（未承認のみ） */}
+            {!item.shipped && !item.canceled && (
+              <button
+                onClick={() => handleCancel(item.id)}
+                className="w-full bg-red-500 text-white p-2 rounded-lg"
+              >
+                申請をキャンセルする
+              </button>
+            )}
+          </div>
+        ))}
       </div>
 
       <a
         href="/"
-        style={{
-          marginTop: "30px",
-          display: "inline-block",
-          padding: "10px 16px",
-          background: "#e5e7eb",
-          color: "#111",
-          borderRadius: "8px",
-          textDecoration: "none",
-        }}
+        className="block text-center mt-6 bg-slate-200 text-slate-800 px-4 py-2 rounded-lg"
       >
         トップへ戻る
       </a>

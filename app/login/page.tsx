@@ -48,6 +48,17 @@ export default function LoginPage() {
         marginTop: "40px",
       }}
     >
+      {/* 🔥 タイトル画像（<img> なので警告ゼロ） */}
+      <div style={{ textAlign: "center", marginBottom: "20px" }}>
+        <img
+          src="/titleImage.webp"
+          alt="title"
+          width="260"
+          height="120"
+          style={{ objectFit: "contain" }}
+        />
+      </div>
+
       {/* カード */}
       <div
         style={{
@@ -55,6 +66,7 @@ export default function LoginPage() {
           padding: "30px",
           borderRadius: "12px",
           boxShadow: "0 2px 10px rgba(0,0,0,0.1)",
+          marginTop: "20px",
         }}
       >
         <h1 style={{ textAlign: "center", marginBottom: "20px" }}>ログイン</h1>
@@ -89,7 +101,6 @@ export default function LoginPage() {
           }}
         />
 
-        {/* ログインボタン */}
         <button
           onClick={handleLogin}
           style={{
@@ -106,7 +117,6 @@ export default function LoginPage() {
           ログイン
         </button>
 
-        {/* パスワード再発行 */}
         <button
           onClick={handleResetPassword}
           style={{
@@ -123,7 +133,6 @@ export default function LoginPage() {
           パスワードを忘れた方はこちら
         </button>
 
-        {/* ★ 新規登録ボタン（追加） */}
         <button
           onClick={() => router.push("/signup")}
           style={{

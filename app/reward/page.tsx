@@ -9,37 +9,48 @@ import {
   getDoc,
   updateDoc,
   setDoc,
+  query,
+  where,
 } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 
 export default function RewardPage() {
   const [rewards, setRewards] = useState<any[]>([]);
-  const [points, setPoints] = useState<number | null>(null);
+  const [points, setPoints] = useState<number>(0);
+  const [sortType, setSortType] = useState("low");
   const router = useRouter();
 
-  // ★ ユーザーのポイント取得（onAuthStateChanged で確実に取得）
+  // 🔥 ユーザーポイント取得（pairPoints）
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (!user) return;
 
-      const userRef = doc(db, "users", user.uid);
-      const userSnap = await getDoc(userRef);
+      const pairPointsRef = collection(db, "pairPoints");
+      const q = query(pairPointsRef, where(user.uid, "!=", null));
+      const snap = await getDocs(q);
 
-      if (userSnap.exists()) {
-        setPoints(userSnap.data().points);
-      }
+      let total = 0;
+      snap.forEach((docSnap) => {
+        const data = docSnap.data();
+        if (data[user.uid]) {
+          total += data[user.uid].received;
+        }
+      });
+
+      setPoints(total);
     });
 
     return () => unsubscribe();
   }, []);
 
-  // 商品一覧取得
+  // 🔥 報酬一覧取得
   useEffect(() => {
     const fetchRewards = async () => {
-      const querySnapshot = await getDocs(collection(db, "rewards"));
+      const snap = await getDocs(collection(db, "rewards"));
       const list: any[] = [];
-      querySnapshot.forEach((docSnap) => {
+      snap.forEach((docSnap) => {
         list.push({ id: docSnap.id, ...docSnap.data() });
       });
       setRewards(list);
@@ -48,16 +59,16 @@ export default function RewardPage() {
     fetchRewards();
   }, []);
 
-  // 発送物を選択
-  const handleSelect = async (reward: any) => {
-    if (points === null) return;
+  // 🔥 交換処理（固定報酬 & 可変報酬）
+  const handleSelect = async (reward: any, variableAmount?: number) => {
+    const cost = reward.type === "variable" ? variableAmount : reward.cost;
 
-    if (points < reward.cost) {
+    if (points < cost) {
       alert("ポイントが足りません！");
       return;
     }
 
-    if (reward.stock <= 0) {
+    if (reward.type === "fixed" && reward.stock <= 0) {
       alert("在庫がありません！");
       return;
     }
@@ -67,95 +78,182 @@ export default function RewardPage() {
 
     const uid = user.uid;
 
-    // ★ ユーザー情報を Firestore から取得（名前・Xアカウント）
-    const userRef = doc(db, "users", uid);
-    const userSnap = await getDoc(userRef);
+    // 🔥 pairPoints の received を減算
+    const pairPointsRef = collection(db, "pairPoints");
+    const q = query(pairPointsRef, where(uid, "!=", null));
+    const snap = await getDocs(q);
 
-    const userName = userSnap.data()?.name ?? "";
-    const userX = userSnap.data()?.xAccount ?? "";
+    if (snap.empty) {
+      alert("ポイント情報が見つかりません");
+      return;
+    }
 
-    const newPoints = points - reward.cost;
+    const pairDoc = snap.docs[0];
+    const pairId = pairDoc.id;
+    const pairData = pairDoc.data();
 
-    // ① ユーザーポイントを減らす
-    await updateDoc(doc(db, "users", uid), {
-      points: newPoints,
+    const newReceived = pairData[uid].received - cost;
+
+    await updateDoc(doc(db, "pairPoints", pairId), {
+      [`${uid}.received`]: newReceived,
     });
 
-    // ② selectedRewards に保存（ユーザーが現在選んでいる商品）
-    await setDoc(doc(db, "selectedRewards", uid), {
-      rewardId: reward.id,
-      name: reward.name,
-      cost: reward.cost,
-      image: reward.image ?? null,
-      timestamp: new Date(),
-      shipped: false,
-    });
-
-    // ③ 在庫を減らす
-    await updateDoc(doc(db, "rewards", reward.id), {
-      stock: reward.stock - 1,
-    });
-
-    // ★ ④ shippingHistory に履歴として保存（ユーザー名・Xアカウント付き）
+    // 🔥 shippingHistory に保存
     await setDoc(doc(collection(db, "shippingHistory")), {
-      uid: uid,
+      uid,
       rewardId: reward.id,
       name: reward.name,
-      cost: reward.cost,
+      cost: cost,
       image: reward.image ?? null,
+      variableAmount: reward.type === "variable" ? variableAmount : null,
       requestedAt: new Date(),
       shipped: false,
-      userName: userName,
-      userX: userX,
     });
 
-    // ⑤ ポイントを画面に反映
-    setPoints(newPoints);
+    // 🔥 在庫（固定報酬のみ）
+    if (reward.type === "fixed") {
+      await updateDoc(doc(db, "rewards", reward.id), {
+        stock: reward.stock - 1,
+      });
+    }
 
-    // 完了画面へ
+    setPoints(newReceived);
     router.push("/reward/complete");
   };
 
+  // 🔥 ソート
+  const sortedRewards = [...rewards].sort((a, b) => {
+    const costA = a.type === "variable" ? a.min : a.cost;
+    const costB = b.type === "variable" ? b.min : b.cost;
+
+    if (sortType === "low") return costA - costB;
+    return costB - costA;
+  });
+
   return (
-    <div style={{ padding: "20px" }}>
-      <h1>発送物を選ぶ</h1>
+    <div className="max-w-xl mx-auto p-6 space-y-10">
+      <h1 className="text-2xl font-bold text-center">ご褒美一覧</h1>
 
-      <p>現在のポイント: {points ?? "読み込み中..."}</p>
+      {/* 現在ポイント */}
+      <section className="p-4 border rounded-xl bg-slate-50">
+        <h2 className="text-lg font-semibold mb-2">あなたのポイント</h2>
+        <p className="text-3xl font-bold text-indigo-600">{points} pt</p>
+      </section>
 
-      <div style={{ marginTop: "20px" }}>
-        {rewards.map((reward) => (
+      {/* ソート */}
+      <div className="flex gap-2 items-center">
+        <span className="text-sm">並び替え：</span>
+        <select
+          className="border p-1 rounded"
+          value={sortType}
+          onChange={(e) => setSortType(e.target.value)}
+        >
+          <option value="low">ポイントが低い順</option>
+          <option value="high">ポイントが高い順</option>
+        </select>
+      </div>
+
+      {/* 報酬一覧 */}
+      <section className="space-y-4">
+        {sortedRewards.map((reward) => (
           <div
             key={reward.id}
-            style={{
-              border: "1px solid #ccc",
-              padding: "10px",
-              marginBottom: "10px",
-            }}
+            className="p-4 border rounded-xl bg-white space-y-3"
           >
-            {/* 画像表示 */}
-            {reward.image && (
-              <img
-                src={reward.image}
-                alt={reward.name}
-                style={{
-                  width: "150px",
-                  height: "150px",
-                  objectFit: "contain",
-                  marginBottom: "10px",
-                }}
+            <div className="flex items-center gap-4">
+              {reward.image && (
+                <Image
+                  src={reward.image}
+                  alt={reward.name}
+                  width={80}
+                  height={80}
+                  className="rounded-lg object-contain"
+                />
+              )}
+
+              <div className="flex-1">
+                <p className="font-semibold">{reward.name}</p>
+
+                {reward.type === "fixed" ? (
+                  <p className="text-sm text-slate-500">
+                    必要ポイント：{reward.cost} pt
+                  </p>
+                ) : (
+                  <p className="text-sm text-slate-500">
+                    申請額：{reward.min}〜{reward.max} pt
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {/* 🔥 可変報酬の入力欄 */}
+            {reward.type === "variable" && (
+              <VariableRewardInput
+                reward={reward}
+                points={points}
+                onSubmit={(amount) => handleSelect(reward, amount)}
               />
             )}
 
-            <h3>{reward.name}</h3>
-            <p>必要ポイント: {reward.cost}</p>
-            <p>在庫: {reward.stock}</p>
-
-            <button onClick={() => handleSelect(reward)}>
-              この商品を選ぶ
-            </button>
+            {/* 🔥 固定報酬の交換ボタン */}
+            {reward.type === "fixed" && (
+              <button
+                onClick={() => handleSelect(reward)}
+                className="w-full px-3 py-2 bg-indigo-600 text-white rounded-lg"
+              >
+                交換する
+              </button>
+            )}
           </div>
         ))}
-      </div>
+      </section>
+    </div>
+  );
+}
+
+/**
+ * 可変報酬の入力コンポーネント
+ */
+function VariableRewardInput({
+  reward,
+  points,
+  onSubmit,
+}: {
+  reward: any;
+  points: number;
+  onSubmit: (amount: number) => void;
+}) {
+  const [amount, setAmount] = useState(reward.min);
+
+  const canExchange = amount <= points;
+
+  return (
+    <div className="space-y-2">
+      <label className="text-sm font-semibold">希望ポイント</label>
+      <input
+        type="number"
+        className="w-full border p-2 rounded"
+        value={amount}
+        min={reward.min}
+        max={reward.max}
+        onChange={(e) => setAmount(Number(e.target.value))}
+      />
+
+      {!canExchange && (
+        <p className="text-red-500 text-sm">ポイントが足りません</p>
+      )}
+
+      <button
+        disabled={!canExchange}
+        onClick={() => onSubmit(amount)}
+        className={`w-full px-3 py-2 rounded-lg ${
+          canExchange
+            ? "bg-indigo-600 text-white"
+            : "bg-slate-300 text-slate-500"
+        }`}
+      >
+        この内容で交換する
+      </button>
     </div>
   );
 }

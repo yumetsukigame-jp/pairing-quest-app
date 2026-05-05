@@ -1,13 +1,24 @@
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
 import fs from "fs";
 import path from "path";
 
 export async function GET() {
-  const rewardsDir = path.join(process.cwd(), "public", "rewards");
-  const files = fs.readdirSync(rewardsDir);
+  try {
+    const dir = path.join(process.cwd(), "public", "rewards");
 
-  const images = files.filter((f) =>
-    f.match(/\.(png|jpg|jpeg|gif|webp)$/i)
-  );
+    // WebP のみ取得
+    const files = fs
+      .readdirSync(dir)
+      .filter((file) => file.toLowerCase().endsWith(".webp"));
 
-  return Response.json(images);
+    // パスを返す
+    const images = files.map((file) => `/rewards/${file}`);
+
+    return Response.json(images);
+  } catch (error) {
+    console.error("API Error:", error);
+    return new Response("Internal Server Error", { status: 500 });
+  }
 }

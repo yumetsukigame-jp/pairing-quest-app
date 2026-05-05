@@ -14,7 +14,10 @@
     "isolatedModules": true,
     "jsx": "react-jsx",
     "incremental": true,
-    "types": ["react", "react-dom"],
+
+    // ★ Node.js の型を追加（重要）
+    "types": ["react", "react-dom", "node"],
+
     "plugins": [{ "name": "next" }],
     "paths": {
       "@/*": ["./*"]

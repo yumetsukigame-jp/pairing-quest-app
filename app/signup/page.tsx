@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { auth, db } from "@/firebase";
 import { createUserWithEmailAndPassword } from "firebase/auth";
-import { doc, setDoc } from "firebase/firestore";
+import { doc, setDoc, serverTimestamp } from "firebase/firestore";
 import { useRouter } from "next/navigation";
 
 export default function SignupPage() {
@@ -23,6 +23,7 @@ export default function SignupPage() {
     setLoading(true);
 
     try {
+      // Firebase Auth でユーザー作成
       const userCredential = await createUserWithEmailAndPassword(
         auth,
         email,
@@ -30,15 +31,19 @@ export default function SignupPage() {
       );
       const user = userCredential.user;
 
-      // ★ 一覧に確実に表示されるように必要なフィールドをすべて保存
+      // ★ Firestore に users/{uid} を必ず作成
       await setDoc(doc(db, "users", user.uid), {
         email,
         name,
         xAccount,
         points: 0,
-        createdAt: new Date(),      // ← 一覧に必須
-        lastLogin: new Date(),      // ← ログイン履歴用
-        xAccountConfirmed: false,   // ← Xアカウント確認フラグ
+        createdAt: serverTimestamp(),
+        lastLogin: serverTimestamp(),
+        xAccountConfirmed: false,
+
+        // ★ キャラ選択画面とトップページのために必須
+        icon: null,
+        pairs: [],
       });
 
       alert("登録が完了しました！");
