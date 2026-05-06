@@ -21,7 +21,7 @@ export default function EditQuestPage() {
 
   const [title, setTitle] = useState("");
   const [detail, setDetail] = useState("");
-  const [point, setPoint] = useState(10);
+  const [point, setPoint] = useState("10"); // ← 文字列で保持（スマホ対策）
   const [deadline, setDeadline] = useState("");
   const [isPublic, setIsPublic] = useState(true);
   const [targetPair, setTargetPair] = useState("all");
@@ -94,7 +94,7 @@ export default function EditQuestPage() {
 
         setTitle(q.title);
         setDetail(q.detail);
-        setPoint(Number(q.point)); // ← 数値として読み込む
+        setPoint(String(q.point)); // ← 文字列としてセット
 
         if (q.deadline && q.deadline.toDate) {
           const d = q.deadline.toDate();
@@ -116,10 +116,12 @@ export default function EditQuestPage() {
 
   // 🔥 更新処理
   const updateQuest = async () => {
+    const numericPoint = parseInt(point, 10) || 0;
+
     await updateDoc(doc(db, "quests", id as string), {
       title,
       detail,
-      point,
+      point: numericPoint,
       deadline: deadline || null,
       isPublic,
       icon,
@@ -128,7 +130,7 @@ export default function EditQuestPage() {
 
     alert("クエストを更新しました！");
 
-    await router.push("/quests/management/quests"); // ← 遷移を確実に実行
+    await router.push("/quests/management/quests");
   };
 
   if (loading) return <div className="p-6 text-center">読み込み中…</div>;
@@ -203,7 +205,11 @@ export default function EditQuestPage() {
         <input
           type="number"
           value={point}
-          onChange={(e) => setPoint(parseInt(e.target.value, 10) || 0)} // ← 先頭の0を防ぐ
+          onChange={(e) => setPoint(e.target.value)} // ← 文字列で保持
+          onBlur={(e) => {
+            const num = parseInt(e.target.value, 10);
+            setPoint(isNaN(num) ? "0" : String(num)); // ← 先頭の0を除去
+          }}
           className="w-full border p-2 rounded-lg"
         />
 
