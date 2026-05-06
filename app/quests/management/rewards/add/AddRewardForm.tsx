@@ -22,9 +22,10 @@ export default function AddRewardForm() {
   const [iconList, setIconList] = useState<string[]>([]);
   const [selectedIcon, setSelectedIcon] = useState<string | null>(null);
 
+  // 🔥 アイコン読み込み（/api/rewards-images）
   useEffect(() => {
     const fetchIcons = async () => {
-      const res = await fetch("/api/rewardicons");
+      const res = await fetch("/api/rewards-images");
       const icons = await res.json();
       setIconList(icons);
     };

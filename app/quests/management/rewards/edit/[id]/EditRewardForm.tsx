@@ -25,8 +25,10 @@ export default function EditRewardForm() {
   const [iconList, setIconList] = useState<string[]>([]);
   const [selectedIcon, setSelectedIcon] = useState<string | null>(null);
 
+  // 🔥 アイコン読み込み（/api/rewards-images）
   useEffect(() => {
     const fetchData = async () => {
+      // 報酬データ読み込み
       const ref = doc(db, "rewards", id as string);
       const snap = await getDoc(ref);
 
@@ -47,7 +49,8 @@ export default function EditRewardForm() {
         }
       }
 
-      const res = await fetch("/api/rewardicons");
+      // アイコン一覧読み込み
+      const res = await fetch("/api/rewards-images");
       const icons = await res.json();
       setIconList(icons);
 

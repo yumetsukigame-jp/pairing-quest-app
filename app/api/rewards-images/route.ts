@@ -8,10 +8,12 @@ export async function GET() {
   try {
     const dir = path.join(process.cwd(), "public", "rewards");
 
-    // WebP のみ取得
+    // PNG / JPG / JPEG / WEBP を取得
     const files = fs
       .readdirSync(dir)
-      .filter((file) => file.toLowerCase().endsWith(".webp"));
+      .filter((file) =>
+        file.toLowerCase().match(/\.(png|jpg|jpeg|webp)$/)
+      );
 
     // パスを返す
     const images = files.map((file) => `/rewards/${file}`);
