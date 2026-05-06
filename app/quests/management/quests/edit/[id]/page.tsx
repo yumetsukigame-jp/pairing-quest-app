@@ -45,12 +45,34 @@ export default function EditQuestPage() {
 
   useEffect(() => {
     const load = async () => {
-      // 🔥 ペア一覧読み込み
+      // 🔥 ペア一覧（UID → 名前変換）
       const pairSnap = await getDocs(collection(db, "pairs"));
-      const pairs = pairSnap.docs.map((d) => ({
-        id: d.id,
-        ...d.data(),
-      }));
+      const pairs: any[] = [];
+
+      for (const d of pairSnap.docs) {
+        const data = d.data();
+        const memberUids: string[] = data.members || [];
+
+        if (memberUids.length < 2) continue;
+
+        const names: string[] = [];
+
+        for (const uid of memberUids) {
+          const userRef = doc(db, "users", uid);
+          const userSnap = await getDoc(userRef);
+
+          if (userSnap.exists()) {
+            const n = userSnap.data().name;
+            if (n) names.push(n);
+          }
+        }
+
+        pairs.push({
+          id: d.id,
+          names: names.length > 0 ? names : ["不明なユーザー"],
+        });
+      }
+
       setPairList(pairs);
 
       // 🔥 アイコン一覧
@@ -101,7 +123,7 @@ export default function EditQuestPage() {
       icon: selectedIcon,
     };
 
-    // 🔥 deadline を Timestamp で保存（重要）
+    // 🔥 deadline を Timestamp で保存（Add と統一）
     data.deadline = deadline
       ? Timestamp.fromDate(new Date(deadline))
       : null;
@@ -224,9 +246,10 @@ export default function EditQuestPage() {
           onChange={(e) => setTargetPair(e.target.value)}
         >
           <option value="all">全体</option>
+
           {pairList.map((p) => (
             <option key={p.id} value={p.id}>
-              {p.members?.join(" & ") || "不明なペア"}
+              {p.names.join(" & ")}
             </option>
           ))}
         </select>

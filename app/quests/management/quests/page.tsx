@@ -5,11 +5,10 @@ import { db } from "@/firebase";
 import {
   collection,
   getDocs,
-  query,
-  orderBy,
   deleteDoc,
   doc,
   getDoc,
+  updateDoc,
 } from "firebase/firestore";
 import Link from "next/link";
 import Image from "next/image";
@@ -17,13 +16,27 @@ import Image from "next/image";
 export default function QuestManagementListPage() {
   const [quests, setQuests] = useState<any[]>([]);
   const [pairNames, setPairNames] = useState<Record<string, string>>({});
+  const [userNames, setUserNames] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
 
-  // 🔥 deadline を安全に変換（Timestamp / string / null）
+  // 🔥 deadline を安全に変換
   const safeToDate = (value: any) => {
     if (!value) return null;
     if (value.toDate) return value.toDate();
     return new Date(value);
+  };
+
+  // 🔥 全ユーザーの UID → 名前変換
+  const loadUserNames = async () => {
+    const snap = await getDocs(collection(db, "users"));
+    const map: Record<string, string> = {};
+
+    snap.forEach((d) => {
+      const data = d.data();
+      if (data.name) map[d.id] = data.name;
+    });
+
+    setUserNames(map);
   };
 
   // 🔥 ペアID → ペア名（UID → 名前変換）
@@ -35,7 +48,6 @@ export default function QuestManagementListPage() {
       const data = d.data();
       const memberUids: string[] = data.members || [];
 
-      // 🔥 自分だけのペアは除外
       if (memberUids.length < 2) continue;
 
       const names: string[] = [];
@@ -58,9 +70,9 @@ export default function QuestManagementListPage() {
 
   useEffect(() => {
     const load = async () => {
+      await loadUserNames();
       await loadPairNames();
 
-      // 🔥 createdAt が string でも落ちないように orderBy を外す
       const snap = await getDocs(collection(db, "quests"));
 
       const list = snap.docs
@@ -73,7 +85,7 @@ export default function QuestManagementListPage() {
           const db = safeToDate(b.createdAt);
           if (!da) return 1;
           if (!db) return -1;
-          return db.getTime() - da.getTime(); // 新しい順
+          return db.getTime() - da.getTime();
         });
 
       setQuests(list);
@@ -83,6 +95,52 @@ export default function QuestManagementListPage() {
     load();
   }, []);
 
+  // 🔥 達成取消（ポイントも戻す）
+  const cancelSuccess = async (quest: any) => {
+    if (!confirm("達成を取り消しますか？")) return;
+
+    const questId = quest.id;
+    const pairId = quest.targetPair;
+    const executor = quest.executor;
+    const points = quest.pointsSuccess || 0;
+
+    // ① クエストを pending に戻す
+    await updateDoc(doc(db, "quests", questId), {
+      status: "pending",
+      executor: null,
+    });
+
+    // ② ペア指定クエストのみポイントを戻す
+    if (pairId !== "all" && executor) {
+      const pairPointsRef = doc(db, "pairPoints", pairId);
+      const pairPointsSnap = await getDoc(pairPointsRef);
+
+      if (pairPointsSnap.exists()) {
+        const data = pairPointsSnap.data();
+        const current = data[executor] || { received: 0, given: 0 };
+
+        await updateDoc(pairPointsRef, {
+          [executor]: {
+            received: current.received - points,
+            given: current.given,
+          },
+        });
+      }
+    }
+
+    alert("達成を取り消し、ポイントを戻しました");
+
+    // ③ UI 更新
+    setQuests((prev) =>
+      prev.map((q) =>
+        q.id === questId
+          ? { ...q, status: "pending", executor: null }
+          : q
+      )
+    );
+  };
+
+  // 🔥 削除
   const deleteQuest = async (id: string) => {
     if (!confirm("このクエストを削除しますか？")) return;
 
@@ -130,6 +188,9 @@ export default function QuestManagementListPage() {
               ? "全体"
               : pairNames[q.targetPair] || "不明なペア";
 
+          const executorName =
+            q.executor ? userNames[q.executor] || "不明なユーザー" : "-";
+
           return (
             <div
               key={q.id}
@@ -153,6 +214,15 @@ export default function QuestManagementListPage() {
                 <p className="font-semibold">{q.title}</p>
                 <p className="text-xs text-slate-500">期限：{deadlineStr}</p>
                 <p className="text-xs text-slate-500">対象：{targetName}</p>
+                <p className="text-xs text-slate-500">
+                  状態：
+                  {q.status === "pending"
+                    ? "進行中"
+                    : q.status === "success"
+                    ? "達成"
+                    : "不達成"}
+                </p>
+                <p className="text-xs text-slate-500">達成者：{executorName}</p>
               </div>
 
               <div className="flex flex-col gap-2">
@@ -162,6 +232,15 @@ export default function QuestManagementListPage() {
                 >
                   編集
                 </Link>
+
+                {q.status === "success" && (
+                  <button
+                    onClick={() => cancelSuccess(q)}
+                    className="px-3 py-1 bg-yellow-500 text-white text-sm rounded-lg"
+                  >
+                    達成取消
+                  </button>
+                )}
 
                 <button
                   onClick={() => deleteQuest(q.id)}
