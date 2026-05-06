@@ -9,6 +9,7 @@ import {
   orderBy,
   deleteDoc,
   doc,
+  getDoc,
 } from "firebase/firestore";
 import Link from "next/link";
 import Image from "next/image";
@@ -18,15 +19,31 @@ export default function QuestManagementListPage() {
   const [pairNames, setPairNames] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
 
-  // 🔥 ペアID → 名前の辞書を作る
+  // 🔥 ペアID → ペア名（UID → 名前変換）
   const loadPairNames = async () => {
     const snap = await getDocs(collection(db, "pairs"));
     const map: Record<string, string> = {};
 
     for (const d of snap.docs) {
       const data = d.data();
-      const names = data.names || data.memberNames || []; // どちらでも対応
-      map[d.id] = names.join(" & ");
+      const memberUids: string[] = data.members || [];
+
+      // 🔥 自分だけのペアは除外
+      if (memberUids.length < 2) continue;
+
+      const names: string[] = [];
+
+      for (const uid of memberUids) {
+        const userRef = doc(db, "users", uid);
+        const userSnap = await getDoc(userRef);
+
+        if (userSnap.exists()) {
+          const n = userSnap.data().name;
+          if (n) names.push(n);
+        }
+      }
+
+      map[d.id] = names.length > 0 ? names.join(" & ") : "不明なペア";
     }
 
     setPairNames(map);
