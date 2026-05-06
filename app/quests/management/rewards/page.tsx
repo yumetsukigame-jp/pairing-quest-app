@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { auth, db } from "@/firebase";
+import { db } from "@/firebase";
 import { collection, getDocs, deleteDoc, doc } from "firebase/firestore";
 import Link from "next/link";
+import Image from "next/image";
 
 export default function AdminRewardsPage() {
   const [rewards, setRewards] = useState<any[]>([]);
@@ -70,19 +71,36 @@ export default function AdminRewardsPage() {
               gap: "16px",
             }}
           >
-            {/* 画像 */}
-            {reward.image && (
-              <img
+            {/* 🔥 Next.js Image に統一 */}
+            {reward.image ? (
+              <Image
                 src={reward.image}
                 alt={reward.name}
-                style={{ width: "80px", height: "80px", objectFit: "contain" }}
+                width={80}
+                height={80}
+                style={{ objectFit: "contain" }}
               />
+            ) : (
+              <div
+                style={{
+                  width: "80px",
+                  height: "80px",
+                  background: "#eee",
+                  borderRadius: "8px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontSize: "12px",
+                  color: "#666",
+                }}
+              >
+                No Image
+              </div>
             )}
 
             <div style={{ flex: 1 }}>
               <h2 style={{ fontSize: "20px" }}>{reward.name}</h2>
 
-              {/* 🔥 fixed / variable で表示を切り替え */}
               {reward.type === "fixed" ? (
                 <>
                   <p>必要ポイント：{reward.cost} pt</p>
