@@ -28,8 +28,9 @@ export default function HomePage() {
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (user) => {
+      // 🔥 未ログイン → /login にリダイレクト
       if (!user) {
-        setLoading(false);
+        window.location.href = "/login";
         return;
       }
 
@@ -38,14 +39,14 @@ export default function HomePage() {
       const userSnap = await getDoc(userRef);
 
       if (!userSnap.exists()) {
-        setLoading(false);
+        window.location.href = "/login";
         return;
       }
 
       const userInfo = userSnap.data();
       setUserData(userInfo);
 
-      // 🔥 ペア情報の読み込み（users.pairs は使わない）
+      // 🔥 ペア情報の読み込み
       const pq = query(
         collection(db, "pairs"),
         where("members", "array-contains", user.uid),
@@ -141,17 +142,14 @@ export default function HomePage() {
         <section className="bg-white rounded-2xl shadow p-6 flex items-center gap-6">
           <div className="flex-shrink-0">
             {userData?.icon ? (
-          <Image
-           src={userData.icon}
-           alt="icon"
-           width={200}
-            height={200}
-            style={{
-             objectFit: "contain",
-           }}
-           className="rounded-xl"
-          />
-
+              <Image
+                src={userData.icon}
+                alt="icon"
+                width={200}
+                height={200}
+                style={{ objectFit: "contain" }}
+                className="rounded-xl"
+              />
             ) : (
               <div className="w-[200px] h-[200px] rounded-xl bg-slate-200 flex items-center justify-center text-xs text-slate-500">
                 No Icon
@@ -198,7 +196,6 @@ export default function HomePage() {
               key={pair.pairId}
               className="border rounded-lg p-3 bg-slate-50 flex items-center gap-4"
             >
-              {/* 🔥 相手のアイコン表示 */}
               {pair.otherIcon ? (
                 <Image
                   src={pair.otherIcon}
@@ -227,7 +224,6 @@ export default function HomePage() {
                   相手の総ポイント：{pair.otherPoints} pt
                 </p>
 
-                {/* 🔥 ペアごとのメッセージへ */}
                 <Link
                   href={`/messages/${pair.pairId}`}
                   className="text-xs text-indigo-600 underline mt-1 inline-block"
