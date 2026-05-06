@@ -35,17 +35,25 @@ export default function QuestListPage() {
         where("members", "array-contains", user.uid)
       );
       const pairSnap = await getDocs(pairQuery);
-      const myPairIds = pairSnap.docs.map((d) => d.id);
 
-      // 🔥 自分が対象のクエストを取得
+      // 自分単体のペアは除外
+      const myPairIds = pairSnap.docs
+        .map((d) => d.id)
+        .filter((id) => id !== null && id !== undefined);
+
+      // 🔥 Firestore の in クエリは危険なので、全件取得してフィルタリング
       const questsRef = collection(db, "quests");
-      const q = query(
-        questsRef,
-        where("targetPair", "in", ["all", ...myPairIds])
-      );
+      const snap = await getDocs(questsRef);
 
-      const snap = await getDocs(q);
-      const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      const allQuests = snap.docs.map((d) => ({
+        id: d.id,
+        ...d.data(),
+      }));
+
+      // 🔥 クライアント側で対象ペアをフィルタリング
+      const list = allQuests.filter((q) => {
+        return q.targetPair === "all" || myPairIds.includes(q.targetPair);
+      });
 
       // 実績計算
       const total = list.length;
