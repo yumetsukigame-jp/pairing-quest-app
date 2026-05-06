@@ -1,136 +1,242 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useState } from "react";
-import { db } from "@/firebase";
-import { collection, getDocs, deleteDoc, doc } from "firebase/firestore";
+import { db, auth } from "@/firebase";
+import {
+  collection,
+  addDoc,
+  getDocs,
+  doc,
+  getDoc,
+  serverTimestamp,
+  query,
+  where,
+} from "firebase/firestore";
+import { useRouter } from "next/navigation";
 import Image from "next/image";
 
-export default function QuestListPage() {
-  const [quests, setQuests] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [sort, setSort] = useState<"created" | "points" | "deadline">("created");
+export default function AddQuestPage() {
+  const router = useRouter();
 
-  const loadQuests = async () => {
-    const snap = await getDocs(collection(db, "quests"));
-    const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-    setQuests(list);
-  };
+  const [name, setName] = useState("");
+  const [detail, setDetail] = useState("");
+  const [point, setPoint] = useState<number>(10);
+  const [deadline, setDeadline] = useState("");
+  const [isPublic, setIsPublic] = useState(true);
 
+  const [iconList, setIconList] = useState<string[]>([]);
+  const [icon, setIcon] = useState<string | null>(null);
+
+  const [pairs, setPairs] = useState<any[]>([]);
+  const [targetPair, setTargetPair] = useState<string>("all");
+
+  // 🔥 アイコン一覧
   useEffect(() => {
-    loadQuests().then(() => setLoading(false));
+    const loadIcons = async () => {
+      const res = await fetch("/questicon/list.json");
+      const data = await res.json();
+      setIconList(data);
+    };
+    loadIcons();
   }, []);
 
-  const deleteQuest = async (id: string) => {
-    if (!confirm("このクエストを削除しますか？")) return;
-    await deleteDoc(doc(db, "quests", id));
-    await loadQuests();
-    alert("クエストを削除しました");
-  };
+  // 🔥 ペア一覧取得
+  useEffect(() => {
+    const loadPairs = async () => {
+      const user = auth.currentUser;
+      if (!user) return;
 
-  const sorted = [...quests].sort((a, b) => {
-    if (sort === "points") return b.points - a.points;
+      const q = query(
+        collection(db, "pairs"),
+        where("members", "array-contains", user.uid)
+      );
 
-    if (sort === "deadline") {
-      const da = a.deadline ? new Date(a.deadline).getTime() : Infinity;
-      const db = b.deadline ? new Date(b.deadline).getTime() : Infinity;
-      return da - db;
+      const snap = await getDocs(q);
+      const list: any[] = [];
+
+      for (const docSnap of snap.docs) {
+        const pairId = docSnap.id;
+        const data = docSnap.data();
+        const memberUids: string[] = data.members || [];
+
+        const names: string[] = [];
+
+        for (const uid of memberUids) {
+          const userRef = doc(db, "users", uid);
+          const userSnap = await getDoc(userRef);
+
+          if (userSnap.exists()) {
+            const n = userSnap.data().name;
+            if (n) names.push(n);
+          }
+        }
+
+        list.push({
+          pairId,
+          names: names.length > 0 ? names : ["不明なユーザー"],
+        });
+      }
+
+      setPairs(list);
+    };
+
+    loadPairs();
+  }, []);
+
+  // 🔥 クエスト作成
+  const handleSubmit = async () => {
+    if (!name.trim()) {
+      alert("クエスト名を入力してください");
+      return;
     }
 
-    return (b.createdAt?.seconds ?? 0) - (a.createdAt?.seconds ?? 0);
-  });
+    const user = auth.currentUser;
+    if (!user) return;
 
-  if (loading) return <div className="p-6 text-center">読み込み中…</div>;
+    await addDoc(collection(db, "quests"), {
+      title: name,
+      detail,
+      point,
+      deadline: deadline || null,
+      isPublic,
+      icon: icon || null,
+      targetPair, // ← ここが重要
+      createdBy: user.uid,
+      createdAt: serverTimestamp(),
+      status: "pending",
+      questType: "normal",
+    });
+
+    router.push("/quests");
+  };
 
   return (
-    <div className="max-w-xl mx-auto p-6 space-y-6">
-      <h1 className="text-2xl font-bold text-center">クエスト一覧</h1>
+    <div className="max-w-xl mx-auto p-6 space-y-8">
+      <h1 className="text-2xl font-bold text-center">クエストを追加</h1>
 
-      <Link
-        href="/quests/management/quests/add"
-        className="block px-4 py-2 bg-indigo-600 text-white rounded-lg text-center"
-      >
-        ＋ クエストを作成
-      </Link>
+      {/* アイコン選択 */}
+      <section className="space-y-3">
+        <h2 className="text-lg font-semibold">アイコン</h2>
 
-      {/* 並び替え */}
-      <div className="flex gap-2">
-        <button
-          onClick={() => setSort("created")}
-          className={`px-3 py-1 rounded-lg text-sm ${
-            sort === "created" ? "bg-indigo-600 text-white" : "bg-slate-200"
-          }`}
-        >
-          作成日順
-        </button>
+        <div className="flex flex-col items-center gap-3">
+          {icon ? (
+            <Image
+              src={icon}
+              alt="quest icon"
+              width={120}
+              height={120}
+              className="rounded-lg object-contain"
+            />
+          ) : (
+            <div className="w-[120px] h-[120px] bg-slate-200 rounded-lg flex items-center justify-center text-xs text-slate-500">
+              アイコン未選択
+            </div>
+          )}
 
-        <button
-          onClick={() => setSort("points")}
-          className={`px-3 py-1 rounded-lg text-sm ${
-            sort === "points" ? "bg-indigo-600 text-white" : "bg-slate-200"
-          }`}
-        >
-          ポイント順
-        </button>
-
-        <button
-          onClick={() => setSort("deadline")}
-          className={`px-3 py-1 rounded-lg text-sm ${
-            sort === "deadline" ? "bg-indigo-600 text-white" : "bg-slate-200"
-          }`}
-        >
-          締め切り順
-        </button>
-      </div>
-
-      <div className="space-y-3">
-        {sorted.map((q) => (
-          <div
-            key={q.id}
-            className="p-4 border rounded-xl bg-white flex items-center gap-4"
-          >
-            {q.icon && (
-              <Image
-                src={q.icon}
-                alt="quest icon"
-                width={70}
-                height={70}
-                className="rounded-lg object-contain border bg-white"
-              />
-            )}
-
-            <div className="flex-1">
-              <p className="font-semibold">{q.title}</p>
-              <p className="text-sm text-slate-500">{q.description}</p>
-              <p className="text-sm text-indigo-600 font-bold">{q.points} pt</p>
-
-              <p
-                className={`text-xs font-bold ${
-                  q.isPublic ? "text-green-600" : "text-red-500"
+          <div className="grid grid-cols-5 gap-3 max-h-40 overflow-y-auto p-2 border rounded-lg bg-white">
+            {iconList.map((path) => (
+              <button
+                key={path}
+                onClick={() => setIcon(path)}
+                className={`border rounded-lg p-1 ${
+                  icon === path ? "border-indigo-600" : "border-slate-300"
                 }`}
               >
-                {q.isPublic ? "公開" : "非公開"}
-              </p>
-            </div>
-
-            <div className="flex flex-col gap-2">
-              <Link
-                href={`/quests/management/quests/edit/${q.id}`}
-                className="px-3 py-1 bg-yellow-500 text-white text-sm rounded-lg"
-              >
-                編集
-              </Link>
-
-              <button
-                onClick={() => deleteQuest(q.id)}
-                className="px-3 py-1 bg-red-500 text-white text-sm rounded-lg"
-              >
-                削除
+                <Image
+                  src={path}
+                  alt="icon"
+                  width={50}
+                  height={50}
+                  className="object-contain"
+                />
               </button>
-            </div>
+            ))}
           </div>
-        ))}
-      </div>
+        </div>
+      </section>
+
+      {/* クエスト名 */}
+      <section>
+        <label className="font-semibold">クエスト名</label>
+        <input
+          type="text"
+          className="w-full border p-2 rounded mt-1"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+        />
+      </section>
+
+      {/* 詳細 */}
+      <section>
+        <label className="font-semibold">詳細</label>
+        <textarea
+          className="w-full border p-2 rounded mt-1"
+          rows={3}
+          value={detail}
+          onChange={(e) => setDetail(e.target.value)}
+        />
+      </section>
+
+      {/* ポイント */}
+      <section>
+        <label className="font-semibold">ポイント</label>
+        <input
+          type="number"
+          className="w-full border p-2 rounded mt-1"
+          value={point}
+          onChange={(e) => setPoint(Number(e.target.value))}
+        />
+      </section>
+
+      {/* 期限 */}
+      <section>
+        <label className="font-semibold">期限（任意）</label>
+        <input
+          type="date"
+          className="w-full border p-2 rounded mt-1"
+          value={deadline}
+          onChange={(e) => setDeadline(e.target.value)}
+        />
+      </section>
+
+      {/* 公開設定 */}
+      <section>
+        <label className="font-semibold">公開設定</label>
+        <select
+          className="w-full border p-2 rounded mt-1"
+          value={isPublic ? "public" : "private"}
+          onChange={(e) => setIsPublic(e.target.value === "public")}
+        >
+          <option value="public">公開</option>
+          <option value="private">非公開</option>
+        </select>
+      </section>
+
+      {/* 対象ペア */}
+      <section>
+        <label className="font-semibold">対象ペア</label>
+        <select
+          className="w-full border p-2 rounded mt-1"
+          value={targetPair}
+          onChange={(e) => setTargetPair(e.target.value)}
+        >
+          <option value="all">全体</option>
+
+          {pairs.map((p) => (
+            <option key={p.pairId} value={p.pairId}>
+              {(p.names || ["不明なユーザー"]).join(" & ")}
+            </option>
+          ))}
+        </select>
+      </section>
+
+      {/* 作成ボタン */}
+      <button
+        onClick={handleSubmit}
+        className="w-full py-3 bg-indigo-600 text-white rounded-lg text-lg"
+      >
+        作成する
+      </button>
     </div>
   );
 }
