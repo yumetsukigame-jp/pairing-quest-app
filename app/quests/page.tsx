@@ -8,6 +8,7 @@ import {
   where,
   getDocs,
 } from "firebase/firestore";
+import { onAuthStateChanged } from "firebase/auth";
 import Link from "next/link";
 import Image from "next/image";
 
@@ -25,9 +26,11 @@ export default function QuestListPage() {
   });
 
   useEffect(() => {
-    const fetchQuests = async () => {
-      const user = auth.currentUser;
-      if (!user) return;
+    const unsub = onAuthStateChanged(auth, async (user) => {
+      if (!user) {
+        setLoading(false);
+        return;
+      }
 
       // 🔥 自分のペアIDを取得
       const pairQuery = query(
@@ -39,9 +42,9 @@ export default function QuestListPage() {
       // 自分単体のペアは除外
       const myPairIds = pairSnap.docs
         .map((d) => d.id)
-        .filter((id) => id !== null && id !== undefined);
+        .filter((id) => id);
 
-      // 🔥 Firestore の in クエリは危険なので、全件取得してフィルタリング
+      // 🔥 Firestore の in 制限回避 → 全件取得
       const questsRef = collection(db, "quests");
       const snap = await getDocs(questsRef);
 
@@ -63,9 +66,9 @@ export default function QuestListPage() {
       setStats({ total, success, rate });
       setQuests(list);
       setLoading(false);
-    };
+    });
 
-    fetchQuests();
+    return () => unsub();
   }, []);
 
   if (loading) {
