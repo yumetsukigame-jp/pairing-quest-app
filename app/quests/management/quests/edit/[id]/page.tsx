@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { db } from "@/firebase";
+import { db, auth } from "@/firebase";
 import { doc, getDoc, updateDoc, getDocs, collection, where, query } from "firebase/firestore";
 import { useRouter, useParams } from "next/navigation";
 import Image from "next/image";
@@ -87,7 +87,6 @@ export default function EditQuestPage() {
         setDetail(q.detail);
         setPoint(q.point);
 
-        // Timestamp → yyyy-mm-dd
         if (q.deadline && q.deadline.toDate) {
           const d = q.deadline.toDate();
           const yyyy = d.getFullYear();
@@ -119,7 +118,7 @@ export default function EditQuestPage() {
     });
 
     alert("クエストを更新しました！");
-    router.push("/quests");
+    router.push("/quests/management/quests");
   };
 
   if (loading) return <div className="p-6 text-center">読み込み中…</div>;
@@ -129,53 +128,58 @@ export default function EditQuestPage() {
       <h1 className="text-2xl font-bold text-center">クエスト編集</h1>
 
       {/* アイコン */}
-      <div className="flex flex-col items-center gap-3">
-        <Image
-          src={icon}
-          alt="quest icon"
-          width={120}
-          height={120}
-          className="rounded-xl border bg-white object-contain"
-        />
-      </div>
+      <section className="space-y-3">
+        <h2 className="text-lg font-semibold">アイコン</h2>
 
-      <div className="grid grid-cols-4 gap-3">
-        {icons.map((img) => (
-          <button
-            key={img}
-            onClick={() => setIcon(img)}
-            className={`border rounded-xl p-1 ${
-              icon === img ? "border-indigo-600" : "border-slate-300"
-            }`}
-          >
-            <Image
-              src={img}
-              alt="icon"
-              width={80}
-              height={80}
-              className="rounded-lg object-contain"
-            />
-          </button>
-        ))}
-      </div>
+        <div className="flex flex-col items-center gap-3">
+          <Image
+            src={icon}
+            alt="quest icon"
+            width={120}
+            height={120}
+            className="rounded-xl border bg-white object-contain"
+          />
+        </div>
+
+        <div className="grid grid-cols-4 gap-3">
+          {icons.map((img) => (
+            <button
+              key={img}
+              onClick={() => setIcon(img)}
+              className={`border rounded-xl p-1 ${
+                icon === img ? "border-indigo-600" : "border-slate-300"
+              }`}
+            >
+              <Image
+                src={img}
+                alt="icon"
+                width={80}
+                height={80}
+                className="rounded-lg object-contain"
+              />
+            </button>
+          ))}
+        </div>
+      </section>
 
       {/* 入力項目 */}
-      <div className="space-y-3">
+      <section className="space-y-3">
+        <label className="font-semibold">クエスト名</label>
         <input
           type="text"
-          placeholder="タイトル"
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           className="w-full border p-2 rounded-lg"
         />
 
+        <label className="font-semibold">詳細</label>
         <textarea
-          placeholder="説明"
           value={detail}
           onChange={(e) => setDetail(e.target.value)}
           className="w-full border p-2 rounded-lg"
         />
 
+        <label className="font-semibold">ポイント</label>
         <input
           type="number"
           value={point}
@@ -183,6 +187,7 @@ export default function EditQuestPage() {
           className="w-full border p-2 rounded-lg"
         />
 
+        <label className="font-semibold">期限</label>
         <input
           type="date"
           value={deadline}
@@ -190,7 +195,7 @@ export default function EditQuestPage() {
           className="w-full border p-2 rounded-lg"
         />
 
-        <label className="flex items-center gap-2">
+        <label className="font-semibold flex items-center gap-2">
           <input
             type="checkbox"
             checked={isPublic}
@@ -199,7 +204,7 @@ export default function EditQuestPage() {
           公開する
         </label>
 
-        {/* 対象ペア */}
+        <label className="font-semibold">対象ペア</label>
         <select
           className="w-full border p-2 rounded-lg"
           value={targetPair}
@@ -219,7 +224,7 @@ export default function EditQuestPage() {
         >
           更新する
         </button>
-      </div>
+      </section>
     </div>
   );
 }
