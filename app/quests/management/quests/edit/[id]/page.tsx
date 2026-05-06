@@ -2,8 +2,17 @@
 
 import { useEffect, useState } from "react";
 import { db, auth } from "@/firebase";
-import { doc, getDoc, updateDoc, getDocs, collection, where, query } from "firebase/firestore";
+import {
+  doc,
+  getDoc,
+  updateDoc,
+  getDocs,
+  collection,
+  where,
+  query,
+} from "firebase/firestore";
 import { useRouter, useParams } from "next/navigation";
+import Link from "next/link";
 import Image from "next/image";
 
 export default function EditQuestPage() {
@@ -85,7 +94,7 @@ export default function EditQuestPage() {
 
         setTitle(q.title);
         setDetail(q.detail);
-        setPoint(q.point);
+        setPoint(Number(q.point)); // ← 数値として読み込む
 
         if (q.deadline && q.deadline.toDate) {
           const d = q.deadline.toDate();
@@ -118,7 +127,8 @@ export default function EditQuestPage() {
     });
 
     alert("クエストを更新しました！");
-    router.push("/quests/management/quests");
+
+    await router.push("/quests/management/quests"); // ← 遷移を確実に実行
   };
 
   if (loading) return <div className="p-6 text-center">読み込み中…</div>;
@@ -126,6 +136,16 @@ export default function EditQuestPage() {
   return (
     <div className="max-w-xl mx-auto p-6 space-y-6">
       <h1 className="text-2xl font-bold text-center">クエスト編集</h1>
+
+      {/* 🔙 戻るボタン */}
+      <div className="mb-4">
+        <Link
+          href="/quests/management/quests"
+          className="text-sm text-indigo-600 underline"
+        >
+          ← クエスト一覧に戻る
+        </Link>
+      </div>
 
       {/* アイコン */}
       <section className="space-y-3">
@@ -183,7 +203,7 @@ export default function EditQuestPage() {
         <input
           type="number"
           value={point}
-          onChange={(e) => setPoint(Number(e.target.value))}
+          onChange={(e) => setPoint(parseInt(e.target.value, 10) || 0)} // ← 先頭の0を防ぐ
           className="w-full border p-2 rounded-lg"
         />
 
