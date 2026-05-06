@@ -25,7 +25,6 @@ export default function QuestListPage() {
     rate: 0,
   });
 
-  // 🔥 deadline を安全に変換
   const safeToDate = (value: any) => {
     if (!value) return null;
     if (value.toDate) return value.toDate();
@@ -39,7 +38,6 @@ export default function QuestListPage() {
         return;
       }
 
-      // 🔥 自分のペアIDを取得
       const pairQuery = query(
         collection(db, "pairs"),
         where("members", "array-contains", user.uid)
@@ -48,7 +46,6 @@ export default function QuestListPage() {
 
       const myPairIds = pairSnap.docs.map((d) => d.id);
 
-      // 🔥 Firestore の in 制限回避 → 全件取得
       const questsRef = collection(db, "quests");
       const snap = await getDocs(questsRef);
 
@@ -57,17 +54,17 @@ export default function QuestListPage() {
         ...d.data(),
       }));
 
-      // 🔥 自分が作ったクエストを除外
+      // 🔥 自分が作ったクエスト + createdBy が無い古いクエストも除外
       const list = allQuests.filter((q) => {
         const isTarget =
           q.targetPair === "all" || myPairIds.includes(q.targetPair);
 
-        const isNotMine = q.createdBy !== user.uid;
+        const isNotMine =
+          q.createdBy && q.createdBy !== user.uid;
 
         return isTarget && isNotMine;
       });
 
-      // 🔥 実績計算
       const total = list.length;
       const success = list.filter((q) => q.status === "success").length;
       const rate = total > 0 ? Math.round((success / total) * 100) : 0;
@@ -88,18 +85,16 @@ export default function QuestListPage() {
     );
   }
 
-  // 🔥 ステータスフィルター
   const filtered = quests.filter((q) => {
     if (statusTab === "all") return true;
     return q.status === statusTab;
   });
 
-  // 🔥 ソート（deadline が Timestamp / string / null でも安全）
   const sorted = [...filtered].sort((a, b) => {
-    if (sortType === "deadline") {
-      const da = safeToDate(a.deadline);
-      const db = safeToDate(b.deadline);
+    const da = safeToDate(a.deadline);
+    const db = safeToDate(b.deadline);
 
+    if (sortType === "deadline") {
       if (!da) return 1;
       if (!db) return -1;
       return da.getTime() - db.getTime();
@@ -152,7 +147,6 @@ export default function QuestListPage() {
     <div className="max-w-xl mx-auto p-6 space-y-10">
       <h1 className="text-2xl font-bold text-center">クエスト一覧</h1>
 
-      {/* 実績 */}
       <section className="p-4 border rounded-xl bg-slate-50">
         <h2 className="text-lg font-semibold mb-2">あなたの実績</h2>
         <p>受注クエスト：{stats.total}件</p>
@@ -160,7 +154,6 @@ export default function QuestListPage() {
         <p>達成率：{stats.rate}%</p>
       </section>
 
-      {/* ステータスタブ */}
       <div className="flex gap-2">
         {["pending", "success", "failed", "all"].map((s) => (
           <button
@@ -178,7 +171,6 @@ export default function QuestListPage() {
         ))}
       </div>
 
-      {/* ソート */}
       <div className="flex gap-2 items-center">
         <span className="text-sm">並び替え：</span>
         <select
@@ -191,7 +183,6 @@ export default function QuestListPage() {
         </select>
       </div>
 
-      {/* クエスト一覧 */}
       <section>
         <h2 className="text-xl font-semibold mb-3">クエスト</h2>
 

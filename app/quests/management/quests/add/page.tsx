@@ -11,6 +11,7 @@ import {
   serverTimestamp,
   query,
   where,
+  Timestamp,
 } from "firebase/firestore";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
@@ -104,11 +105,15 @@ export default function AddQuestPage() {
       point: numericPoint,
       pointsSuccess: numericPoint,
       pointsFail: 0,
-      deadline: deadline ? new Date(deadline) : null,
+
+      // 🔥 Firestore Timestamp で保存（重要）
+      deadline: deadline ? Timestamp.fromDate(new Date(deadline)) : null,
+
       icon: icon || null,
       targetPair,
       questType,
       dailyResetTime: questType === "daily" ? dailyResetTime : null,
+
       createdBy: user.uid,
       createdAt: serverTimestamp(),
       status: "pending",

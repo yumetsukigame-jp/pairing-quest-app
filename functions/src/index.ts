@@ -24,35 +24,36 @@ exports.checkQuestDeadlines = functions.pubsub
       const deadline = quest.deadline ? quest.deadline.toDate() : null;
       if (!deadline) continue;
 
+      // まだ期限前ならスキップ
       if (deadline > now) continue;
 
       console.log(`期限切れクエスト: ${questId}`);
 
-      // 🔥 非公開クエストはポイント処理しない → failed にするだけ
-      if (quest.isPublic === false) {
-        await docSnap.ref.update({
-          status: "failed",
-          failedAt: admin.firestore.Timestamp.now(),
-        });
-        continue;
-      }
-
-      // 🔥 公開クエスト → 失敗ポイント処理
+      // ============================
+      // ① まず failed にする（デイリーも通常も）
+      // ============================
       await docSnap.ref.update({
         status: "failed",
+        executor: null,
         failedAt: admin.firestore.Timestamp.now(),
       });
 
-      if (quest.executor) {
+      // ============================
+      // ② ペア指定クエストのみ失敗ポイント付与
+      // ============================
+      if (quest.targetPair !== "all" && quest.executor) {
         await applyFailPoints(quest);
       }
 
-      // 🔥 デイリークエストなら再配置（仕様：失敗扱い＋再配置）
+      // ============================
+      // ③ デイリークエストは再配置（翌日の deadline）
+      // ============================
       if (quest.questType === "daily") {
         const nextDeadline = getNextDailyDeadline(quest.dailyResetTime);
 
         await docSnap.ref.update({
           status: "pending",
+          executor: null,
           deadline: nextDeadline,
         });
 
@@ -64,7 +65,7 @@ exports.checkQuestDeadlines = functions.pubsub
   });
 
 /**
- * 不達成ポイントを実行者に付与
+ * 不達成ポイントを実行者に付与（ペア指定クエストのみ）
  */
 async function applyFailPoints(quest: any) {
   const pairId = quest.targetPair;

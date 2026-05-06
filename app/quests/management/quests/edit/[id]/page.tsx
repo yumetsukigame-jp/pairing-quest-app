@@ -9,6 +9,7 @@ import {
   updateDoc,
   collection,
   getDocs,
+  Timestamp,
 } from "firebase/firestore";
 import Image from "next/image";
 
@@ -100,8 +101,10 @@ export default function EditQuestPage() {
       icon: selectedIcon,
     };
 
-    // 🔥 deadline 保存
-    data.deadline = deadline ? new Date(deadline) : null;
+    // 🔥 deadline を Timestamp で保存（重要）
+    data.deadline = deadline
+      ? Timestamp.fromDate(new Date(deadline))
+      : null;
 
     if (questType === "daily") {
       data.dailyResetTime = dailyResetTime;
