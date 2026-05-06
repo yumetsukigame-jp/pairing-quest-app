@@ -25,7 +25,7 @@ export default function AddQuestPage() {
   const [isPublic, setIsPublic] = useState(true);
   const [questType, setQuestType] = useState("normal");
 
-  const [dailyResetTime, setDailyResetTime] = useState("00:00"); // ← 追加
+  const [dailyResetTime, setDailyResetTime] = useState("00:00");
 
   const [iconList, setIconList] = useState<string[]>([]);
   const [icon, setIcon] = useState<string | null>(null);
@@ -43,7 +43,7 @@ export default function AddQuestPage() {
     loadIcons();
   }, []);
 
-  // 🔥 ペア一覧
+  // 🔥 ペア一覧（UID → 名前変換）
   useEffect(() => {
     const loadPairs = async () => {
       const user = auth.currentUser;
@@ -107,7 +107,7 @@ export default function AddQuestPage() {
       icon: icon || null,
       targetPair,
       questType,
-      dailyResetTime: questType === "daily" ? dailyResetTime : null, // ← 追加
+      dailyResetTime: questType === "daily" ? dailyResetTime : null,
       createdBy: user.uid,
       createdAt: serverTimestamp(),
       status: "pending",
@@ -222,7 +222,7 @@ export default function AddQuestPage() {
         </select>
       </section>
 
-      {/* デイリーリセット時刻（デイリーのときだけ表示） */}
+      {/* デイリーリセット時刻 */}
       {questType === "daily" && (
         <section>
           <label className="font-semibold">デイリーリセット時刻</label>

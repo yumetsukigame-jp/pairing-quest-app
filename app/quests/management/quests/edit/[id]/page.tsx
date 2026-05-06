@@ -27,7 +27,7 @@ export default function EditQuestPage() {
   const [targetPair, setTargetPair] = useState("all");
   const [questType, setQuestType] = useState("normal");
 
-  const [dailyResetTime, setDailyResetTime] = useState("00:00"); // ← 追加
+  const [dailyResetTime, setDailyResetTime] = useState("00:00");
 
   const [icon, setIcon] = useState("");
   const [icons, setIcons] = useState<string[]>([]);
@@ -45,7 +45,7 @@ export default function EditQuestPage() {
     loadIcons();
   }, []);
 
-  // 🔥 ペア一覧
+  // 🔥 ペア一覧（UID → 名前変換）
   useEffect(() => {
     const loadPairs = async () => {
       const user = auth.currentUser;
@@ -99,8 +99,7 @@ export default function EditQuestPage() {
         setDetail(q.detail);
         setPoint(String(q.point));
         setQuestType(q.questType || "normal");
-
-        setDailyResetTime(q.dailyResetTime || "00:00"); // ← 読み込み
+        setDailyResetTime(q.dailyResetTime || "00:00");
 
         if (q.deadline && q.deadline.toDate) {
           const d = q.deadline.toDate();
@@ -133,7 +132,7 @@ export default function EditQuestPage() {
       icon,
       targetPair,
       questType,
-      dailyResetTime: questType === "daily" ? dailyResetTime : null, // ← 保存
+      dailyResetTime: questType === "daily" ? dailyResetTime : null,
     });
 
     alert("クエストを更新しました！");
@@ -239,7 +238,7 @@ export default function EditQuestPage() {
           <option value="daily">デイリークエスト</option>
         </select>
 
-        {/* デイリーリセット時刻（デイリーのときだけ表示） */}
+        {/* デイリーリセット時刻 */}
         {questType === "daily" && (
           <section>
             <label className="font-semibold">デイリーリセット時刻</label>
