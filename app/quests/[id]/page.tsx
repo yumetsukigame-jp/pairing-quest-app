@@ -20,7 +20,13 @@ export default function QuestDetailPage() {
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
-  // 🔥 ユーザー確定 & クエスト読み込み
+  // 🔥 deadline を安全に変換
+  const safeToDate = (value: any) => {
+    if (!value) return null;
+    if (value.toDate) return value.toDate();
+    return new Date(value);
+  };
+
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (u) => {
       setUser(u);
@@ -29,7 +35,16 @@ export default function QuestDetailPage() {
       const snap = await getDoc(ref);
 
       if (snap.exists()) {
-        setQuest({ id: snap.id, ...snap.data() });
+        const q = { id: snap.id, ...snap.data() };
+
+        // 🔥 自分が作ったクエストは表示しない
+        if (u && q.createdBy === u.uid) {
+          setQuest(null);
+          setLoading(false);
+          return;
+        }
+
+        setQuest(q);
       }
 
       setLoading(false);
@@ -37,17 +52,6 @@ export default function QuestDetailPage() {
 
     return () => unsub();
   }, [id]);
-
-  // 🔥 deadline を安全に変換（Timestamp / string / null すべて対応）
-  const getDeadline = () => {
-    if (!quest?.deadline) return null;
-
-    if (quest.deadline.toDate) {
-      return quest.deadline.toDate();
-    }
-
-    return new Date(quest.deadline);
-  };
 
   // 🔥 クエスト達成処理
   const handleSuccess = async () => {
@@ -85,15 +89,18 @@ export default function QuestDetailPage() {
     );
   }
 
+  // 🔥 自分が作ったクエスト or 存在しないクエスト
   if (!quest) {
     return (
-      <div className="min-h-screen flex items-center justify-center text-slate-500">
-        クエストが見つかりません
+      <div className="min-h-screen flex items-center justify-center text-slate-500 text-center p-6">
+        このクエストは表示できません。
+        <br />
+        （自分が作成したクエストは管理画面でのみ表示されます）
       </div>
     );
   }
 
-  const deadline = getDeadline();
+  const deadline = safeToDate(quest.deadline);
   const deadlineStr = deadline
     ? `${deadline.getMonth() + 1}/${deadline.getDate()} ${deadline.getHours()}:${String(
         deadline.getMinutes()
@@ -124,7 +131,7 @@ export default function QuestDetailPage() {
       {/* タイトル */}
       <h2 className="text-xl font-semibold text-center">{quest.title}</h2>
 
-      {/* 説明（detail に修正） */}
+      {/* 説明 */}
       <p className="text-slate-700 whitespace-pre-line">{quest.detail}</p>
 
       {/* クエストタイプ */}
@@ -135,7 +142,7 @@ export default function QuestDetailPage() {
       {/* 期限 */}
       <p className="text-sm text-slate-600">期限：{deadlineStr}</p>
 
-      {/* ポイント（point / pointsSuccess / pointsFail に対応） */}
+      {/* ポイント */}
       <p className="text-sm text-slate-600">
         成功：+{quest.pointsSuccess ?? quest.point ?? 0}pt / 失敗：
         {quest.pointsFail ?? 0}pt

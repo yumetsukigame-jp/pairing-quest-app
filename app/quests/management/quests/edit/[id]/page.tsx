@@ -1,289 +1,266 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { db, auth } from "@/firebase";
+import { useParams, useRouter } from "next/navigation";
+import { db } from "@/firebase";
 import {
   doc,
   getDoc,
   updateDoc,
-  getDocs,
   collection,
-  where,
-  query,
+  getDocs,
 } from "firebase/firestore";
-import { useRouter, useParams } from "next/navigation";
-import Link from "next/link";
 import Image from "next/image";
 
 export default function EditQuestPage() {
-  const router = useRouter();
   const { id } = useParams();
-
-  const [title, setTitle] = useState("");
-  const [detail, setDetail] = useState("");
-  const [point, setPoint] = useState("10");
-  const [deadline, setDeadline] = useState("");
-  const [isPublic, setIsPublic] = useState(true);
-  const [targetPair, setTargetPair] = useState("all");
-  const [questType, setQuestType] = useState("normal");
-
-  const [dailyResetTime, setDailyResetTime] = useState("00:00");
-
-  const [icon, setIcon] = useState("");
-  const [icons, setIcons] = useState<string[]>([]);
-  const [pairs, setPairs] = useState<any[]>([]);
+  const router = useRouter();
 
   const [loading, setLoading] = useState(true);
 
-  // 🔥 アイコン一覧
+  const [title, setTitle] = useState("");
+  const [detail, setDetail] = useState("");
+  const [point, setPoint] = useState(0);
+  const [pointsSuccess, setPointsSuccess] = useState(0);
+  const [pointsFail, setPointsFail] = useState(0);
+
+  const [deadline, setDeadline] = useState<string | null>(null);
+
+  const [questType, setQuestType] = useState<"normal" | "daily">("normal");
+  const [dailyResetTime, setDailyResetTime] = useState("00:00");
+
+  const [targetPair, setTargetPair] = useState("all");
+  const [pairList, setPairList] = useState<any[]>([]);
+
+  const [iconList, setIconList] = useState<string[]>([]);
+  const [selectedIcon, setSelectedIcon] = useState<string | null>(null);
+
+  // 🔥 deadline を安全に変換
+  const safeToDate = (value: any) => {
+    if (!value) return null;
+    if (value.toDate) return value.toDate();
+    return new Date(value);
+  };
+
   useEffect(() => {
-    const loadIcons = async () => {
-      const res = await fetch("/questicon/list.json");
-      const data = await res.json();
-      setIcons(data);
-    };
-    loadIcons();
-  }, []);
+    const load = async () => {
+      // 🔥 ペア一覧読み込み
+      const pairSnap = await getDocs(collection(db, "pairs"));
+      const pairs = pairSnap.docs.map((d) => ({
+        id: d.id,
+        ...d.data(),
+      }));
+      setPairList(pairs);
 
-  // 🔥 ペア一覧（自分単体のペアを除外）
-  useEffect(() => {
-    const loadPairs = async () => {
-      const user = auth.currentUser;
-      if (!user) return;
+      // 🔥 アイコン一覧
+      const res = await fetch("/api/rewards-images");
+      const icons = await res.json();
+      setIconList(icons);
 
-      const q = query(
-        collection(db, "pairs"),
-        where("members", "array-contains", user.uid)
-      );
+      // 🔥 クエスト読み込み
+      const ref = doc(db, "quests", id as string);
+      const snap = await getDoc(ref);
 
-      const snap = await getDocs(q);
-      const list: any[] = [];
-
-      for (const docSnap of snap.docs) {
-        const pairId = docSnap.id;
-        const data = docSnap.data();
-        const memberUids: string[] = data.members || [];
-
-        // 🔥 自分だけのペアは除外
-        if (memberUids.length < 2) continue;
-
-        const names: string[] = [];
-
-        for (const uid of memberUids) {
-          const userRef = doc(db, "users", uid);
-          const userSnap = await getDoc(userRef);
-
-          if (userSnap.exists()) {
-            const n = userSnap.data().name;
-            if (n) names.push(n);
-          }
-        }
-
-        list.push({
-          pairId,
-          names: names.length > 0 ? names : ["不明なユーザー"],
-        });
-      }
-
-      setPairs(list);
-    };
-
-    loadPairs();
-  }, []);
-
-  // 🔥 クエスト読み込み
-  useEffect(() => {
-    const loadQuest = async () => {
-      const snap = await getDoc(doc(db, "quests", id as string));
       if (snap.exists()) {
         const q = snap.data();
 
-        setTitle(q.title);
-        setDetail(q.detail);
-        setPoint(String(q.point));
+        setTitle(q.title || "");
+        setDetail(q.detail || "");
+        setPoint(q.point ?? 0);
+        setPointsSuccess(q.pointsSuccess ?? q.point ?? 0);
+        setPointsFail(q.pointsFail ?? 0);
+
+        const d = safeToDate(q.deadline);
+        setDeadline(d ? d.toISOString().slice(0, 16) : null);
+
         setQuestType(q.questType || "normal");
         setDailyResetTime(q.dailyResetTime || "00:00");
 
-        if (q.deadline && q.deadline.toDate) {
-          const d = q.deadline.toDate();
-          const yyyy = d.getFullYear();
-          const mm = String(d.getMonth() + 1).padStart(2, "0");
-          const dd = String(d.getDate()).padStart(2, "0");
-          setDeadline(`${yyyy}-${mm}-${dd}`);
-        }
-
-        setIsPublic(q.isPublic ?? true);
-        setIcon(q.icon || "");
         setTargetPair(q.targetPair || "all");
+        setSelectedIcon(q.icon || null);
       }
+
       setLoading(false);
     };
 
-    loadQuest();
+    load();
   }, [id]);
 
-  // 🔥 更新処理
-  const updateQuest = async () => {
-    const numericPoint = parseInt(point, 10) || 0;
+  const handleSave = async () => {
+    const ref = doc(db, "quests", id as string);
 
-    await updateDoc(doc(db, "quests", id as string), {
+    const data: any = {
       title,
       detail,
-      point: numericPoint,
-      deadline: deadline || null,
-      isPublic,
-      icon,
-      targetPair,
+      point,
+      pointsSuccess,
+      pointsFail,
       questType,
-      dailyResetTime: questType === "daily" ? dailyResetTime : null,
-    });
+      targetPair,
+      icon: selectedIcon,
+    };
 
-    alert("クエストを更新しました！");
-    await router.push("/quests/management/quests");
+    // 🔥 deadline 保存
+    data.deadline = deadline ? new Date(deadline) : null;
+
+    if (questType === "daily") {
+      data.dailyResetTime = dailyResetTime;
+    }
+
+    await updateDoc(ref, data);
+
+    alert("更新しました！");
+    router.push("/quests/management/quests");
   };
 
-  if (loading) return <div className="p-6 text-center">読み込み中…</div>;
+  if (loading) {
+    return (
+      <div className="p-6 text-center text-slate-500">読み込み中…</div>
+    );
+  }
 
   return (
     <div className="max-w-xl mx-auto p-6 space-y-6">
       <h1 className="text-2xl font-bold text-center">クエスト編集</h1>
 
-      {/* 🔙 戻るボタン */}
+      {/* 戻る */}
       <div className="mb-4">
-        <Link
-          href="/quests/management/quests"
-          className="text-sm text-indigo-600 underline"
+        <button
+          onClick={() => router.push("/quests/management/quests")}
+          className="text-indigo-600 underline"
         >
           ← クエスト一覧に戻る
-        </Link>
+        </button>
+      </div>
+
+      {/* タイトル */}
+      <div className="space-y-2">
+        <label className="text-sm font-semibold">タイトル</label>
+        <input
+          className="w-full border p-2 rounded"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+        />
+      </div>
+
+      {/* 説明 */}
+      <div className="space-y-2">
+        <label className="text-sm font-semibold">説明</label>
+        <textarea
+          className="w-full border p-2 rounded"
+          rows={4}
+          value={detail}
+          onChange={(e) => setDetail(e.target.value)}
+        />
+      </div>
+
+      {/* クエストタイプ */}
+      <div className="space-y-2">
+        <label className="text-sm font-semibold">クエストタイプ</label>
+        <select
+          className="w-full border p-2 rounded"
+          value={questType}
+          onChange={(e) => setQuestType(e.target.value as any)}
+        >
+          <option value="normal">通常クエスト</option>
+          <option value="daily">デイリークエスト</option>
+        </select>
+      </div>
+
+      {/* デイリーリセット */}
+      {questType === "daily" && (
+        <div className="space-y-2">
+          <label className="text-sm font-semibold">デイリーリセット時刻</label>
+          <input
+            type="time"
+            className="w-full border p-2 rounded"
+            value={dailyResetTime}
+            onChange={(e) => setDailyResetTime(e.target.value)}
+          />
+        </div>
+      )}
+
+      {/* ポイント */}
+      <div className="space-y-2">
+        <label className="text-sm font-semibold">成功ポイント</label>
+        <input
+          type="number"
+          className="w-full border p-2 rounded"
+          value={pointsSuccess}
+          onChange={(e) => setPointsSuccess(Number(e.target.value))}
+        />
+      </div>
+
+      <div className="space-y-2">
+        <label className="text-sm font-semibold">失敗ポイント</label>
+        <input
+          type="number"
+          className="w-full border p-2 rounded"
+          value={pointsFail}
+          onChange={(e) => setPointsFail(Number(e.target.value))}
+        />
+      </div>
+
+      {/* 期限 */}
+      <div className="space-y-2">
+        <label className="text-sm font-semibold">期限</label>
+        <input
+          type="datetime-local"
+          className="w-full border p-2 rounded"
+          value={deadline ?? ""}
+          onChange={(e) => setDeadline(e.target.value)}
+        />
+      </div>
+
+      {/* 対象ペア */}
+      <div className="space-y-2">
+        <label className="text-sm font-semibold">対象ペア</label>
+        <select
+          className="w-full border p-2 rounded"
+          value={targetPair}
+          onChange={(e) => setTargetPair(e.target.value)}
+        >
+          <option value="all">全体</option>
+          {pairList.map((p) => (
+            <option key={p.id} value={p.id}>
+              {p.members?.join(" & ") || "不明なペア"}
+            </option>
+          ))}
+        </select>
       </div>
 
       {/* アイコン */}
-      <section className="space-y-3">
-        <h2 className="text-lg font-semibold">アイコン</h2>
+      <div className="space-y-2">
+        <label className="text-sm font-semibold">アイコン</label>
 
-        <div className="flex flex-col items-center gap-3">
-          <Image
-            src={icon}
-            alt="quest icon"
-            width={120}
-            height={120}
-            className="rounded-xl border bg-white object-contain"
-          />
-        </div>
-
-        <div className="grid grid-cols-4 gap-3">
-          {icons.map((img) => (
-            <button
-              key={img}
-              onClick={() => setIcon(img)}
-              className={`border rounded-xl p-1 ${
-                icon === img ? "border-indigo-600" : "border-slate-300"
+        <div className="grid grid-cols-3 gap-4">
+          {iconList.map((icon) => (
+            <div
+              key={icon}
+              onClick={() => setSelectedIcon(icon)}
+              className={`border rounded-xl p-2 cursor-pointer ${
+                selectedIcon === icon ? "ring-4 ring-indigo-500" : ""
               }`}
             >
               <Image
-                src={img}
+                src={icon}
                 alt="icon"
                 width={80}
                 height={80}
                 className="rounded-lg object-contain"
               />
-            </button>
+            </div>
           ))}
         </div>
-      </section>
+      </div>
 
-      {/* 入力項目 */}
-      <section className="space-y-3">
-        <label className="font-semibold">クエスト名</label>
-        <input
-          type="text"
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          className="w-full border p-2 rounded-lg"
-        />
-
-        <label className="font-semibold">詳細</label>
-        <textarea
-          value={detail}
-          onChange={(e) => setDetail(e.target.value)}
-          className="w-full border p-2 rounded-lg"
-        />
-
-        <label className="font-semibold">ポイント</label>
-        <input
-          type="number"
-          value={point}
-          onChange={(e) => setPoint(e.target.value)}
-          onBlur={(e) => {
-            const num = parseInt(e.target.value, 10);
-            setPoint(isNaN(num) ? "0" : String(num));
-          }}
-          className="w-full border p-2 rounded-lg"
-        />
-
-        <label className="font-semibold">期限</label>
-        <input
-          type="date"
-          value={deadline}
-          onChange={(e) => setDeadline(e.target.value)}
-          className="w-full border p-2 rounded-lg"
-        />
-
-        {/* クエストタイプ */}
-        <label className="font-semibold">クエストタイプ</label>
-        <select
-          className="w-full border p-2 rounded-lg"
-          value={questType}
-          onChange={(e) => setQuestType(e.target.value)}
-        >
-          <option value="normal">通常クエスト</option>
-          <option value="daily">デイリークエスト</option>
-        </select>
-
-        {/* デイリーリセット時刻 */}
-        {questType === "daily" && (
-          <section>
-            <label className="font-semibold">デイリーリセット時刻</label>
-            <input
-              type="time"
-              className="w-full border p-2 rounded-lg mt-1"
-              value={dailyResetTime}
-              onChange={(e) => setDailyResetTime(e.target.value)}
-            />
-          </section>
-        )}
-
-        <label className="font-semibold flex items-center gap-2">
-          <input
-            type="checkbox"
-            checked={isPublic}
-            onChange={(e) => setIsPublic(e.target.checked)}
-          />
-          公開する
-        </label>
-
-        <label className="font-semibold">対象ペア</label>
-        <select
-          className="w-full border p-2 rounded-lg"
-          value={targetPair}
-          onChange={(e) => setTargetPair(e.target.value)}
-        >
-          <option value="all">全体</option>
-          {pairs.map((p) => (
-            <option key={p.pairId} value={p.pairId}>
-              {(p.names || ["不明なユーザー"]).join(" & ")}
-            </option>
-          ))}
-        </select>
-
-        <button
-          onClick={updateQuest}
-          className="w-full py-2 bg-indigo-600 text-white rounded-lg"
-        >
-          更新する
-        </button>
-      </section>
+      {/* 保存 */}
+      <button
+        onClick={handleSave}
+        className="w-full bg-indigo-600 text-white p-3 rounded-lg text-lg"
+      >
+        保存する
+      </button>
     </div>
   );
 }

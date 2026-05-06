@@ -25,6 +25,13 @@ export default function QuestListPage() {
     rate: 0,
   });
 
+  // 🔥 deadline を安全に変換
+  const safeToDate = (value: any) => {
+    if (!value) return null;
+    if (value.toDate) return value.toDate();
+    return new Date(value);
+  };
+
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (user) => {
       if (!user) {
@@ -50,12 +57,17 @@ export default function QuestListPage() {
         ...d.data(),
       }));
 
-      // 🔥 クライアント側で対象ペアをフィルタリング
+      // 🔥 自分が作ったクエストを除外
       const list = allQuests.filter((q) => {
-        return q.targetPair === "all" || myPairIds.includes(q.targetPair);
+        const isTarget =
+          q.targetPair === "all" || myPairIds.includes(q.targetPair);
+
+        const isNotMine = q.createdBy !== user.uid;
+
+        return isTarget && isNotMine;
       });
 
-      // 実績計算
+      // 🔥 実績計算
       const total = list.length;
       const success = list.filter((q) => q.status === "success").length;
       const rate = total > 0 ? Math.round((success / total) * 100) : 0;
@@ -82,16 +94,11 @@ export default function QuestListPage() {
     return q.status === statusTab;
   });
 
-  // 🔥 ソート（deadline が Timestamp でも string でも null でも安全）
+  // 🔥 ソート（deadline が Timestamp / string / null でも安全）
   const sorted = [...filtered].sort((a, b) => {
     if (sortType === "deadline") {
-      const da =
-        a.deadline?.toDate?.() ??
-        (a.deadline ? new Date(a.deadline) : null);
-
-      const db =
-        b.deadline?.toDate?.() ??
-        (b.deadline ? new Date(b.deadline) : null);
+      const da = safeToDate(a.deadline);
+      const db = safeToDate(b.deadline);
 
       if (!da) return 1;
       if (!db) return -1;
@@ -106,9 +113,7 @@ export default function QuestListPage() {
   });
 
   const renderQuest = (quest: any) => {
-    const deadline =
-      quest.deadline?.toDate?.() ??
-      (quest.deadline ? new Date(quest.deadline) : null);
+    const deadline = safeToDate(quest.deadline);
 
     const deadlineStr = deadline
       ? `${deadline.getMonth() + 1}/${deadline.getDate()}`

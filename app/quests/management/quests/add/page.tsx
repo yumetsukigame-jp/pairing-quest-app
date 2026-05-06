@@ -22,9 +22,7 @@ export default function AddQuestPage() {
   const [detail, setDetail] = useState("");
   const [point, setPoint] = useState("10");
   const [deadline, setDeadline] = useState("");
-  const [isPublic, setIsPublic] = useState(true);
   const [questType, setQuestType] = useState("normal");
-
   const [dailyResetTime, setDailyResetTime] = useState("00:00");
 
   const [iconList, setIconList] = useState<string[]>([]);
@@ -33,10 +31,10 @@ export default function AddQuestPage() {
   const [pairs, setPairs] = useState<any[]>([]);
   const [targetPair, setTargetPair] = useState<string>("all");
 
-  // 🔥 アイコン一覧
+  // 🔥 アイコン一覧（統一）
   useEffect(() => {
     const loadIcons = async () => {
-      const res = await fetch("/questicon/list.json");
+      const res = await fetch("/api/rewards-images");
       const data = await res.json();
       setIconList(data);
     };
@@ -62,7 +60,6 @@ export default function AddQuestPage() {
         const data = docSnap.data();
         const memberUids: string[] = data.members || [];
 
-        // 🔥 自分だけのペアは除外
         if (memberUids.length < 2) continue;
 
         const names: string[] = [];
@@ -105,8 +102,9 @@ export default function AddQuestPage() {
       title,
       detail,
       point: numericPoint,
-      deadline: deadline || null,
-      isPublic,
+      pointsSuccess: numericPoint,
+      pointsFail: 0,
+      deadline: deadline ? new Date(deadline) : null,
       icon: icon || null,
       targetPair,
       questType,
@@ -194,10 +192,6 @@ export default function AddQuestPage() {
           className="w-full border p-2 rounded mt-1"
           value={point}
           onChange={(e) => setPoint(e.target.value)}
-          onBlur={(e) => {
-            const num = parseInt(e.target.value, 10);
-            setPoint(isNaN(num) ? "0" : String(num));
-          }}
         />
       </section>
 
@@ -205,7 +199,7 @@ export default function AddQuestPage() {
       <section>
         <label className="font-semibold">期限（任意）</label>
         <input
-          type="date"
+          type="datetime-local"
           className="w-full border p-2 rounded mt-1"
           value={deadline}
           onChange={(e) => setDeadline(e.target.value)}
@@ -237,19 +231,6 @@ export default function AddQuestPage() {
           />
         </section>
       )}
-
-      {/* 公開設定 */}
-      <section>
-        <label className="font-semibold">公開設定</label>
-        <select
-          className="w-full border p-2 rounded mt-1"
-          value={isPublic ? "public" : "private"}
-          onChange={(e) => setIsPublic(e.target.value === "public")}
-        >
-          <option value="public">公開</option>
-          <option value="private">非公開</option>
-        </select>
-      </section>
 
       {/* 対象ペア */}
       <section>

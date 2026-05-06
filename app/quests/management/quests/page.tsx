@@ -19,6 +19,13 @@ export default function QuestManagementListPage() {
   const [pairNames, setPairNames] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
 
+  // 🔥 deadline を安全に変換（Timestamp / string / null）
+  const safeToDate = (value: any) => {
+    if (!value) return null;
+    if (value.toDate) return value.toDate();
+    return new Date(value);
+  };
+
   // 🔥 ペアID → ペア名（UID → 名前変換）
   const loadPairNames = async () => {
     const snap = await getDocs(collection(db, "pairs"));
@@ -53,13 +60,21 @@ export default function QuestManagementListPage() {
     const load = async () => {
       await loadPairNames();
 
-      const q = query(collection(db, "quests"), orderBy("createdAt", "desc"));
-      const snap = await getDocs(q);
+      // 🔥 createdAt が string でも落ちないように orderBy を外す
+      const snap = await getDocs(collection(db, "quests"));
 
-      const list = snap.docs.map((d) => ({
-        id: d.id,
-        ...d.data(),
-      }));
+      const list = snap.docs
+        .map((d) => ({
+          id: d.id,
+          ...d.data(),
+        }))
+        .sort((a, b) => {
+          const da = safeToDate(a.createdAt);
+          const db = safeToDate(b.createdAt);
+          if (!da) return 1;
+          if (!db) return -1;
+          return db.getTime() - da.getTime(); // 新しい順
+        });
 
       setQuests(list);
       setLoading(false);
@@ -104,15 +119,12 @@ export default function QuestManagementListPage() {
         )}
 
         {quests.map((q) => {
-          const deadline = q.deadline?.toDate
-            ? q.deadline.toDate()
-            : null;
+          const deadline = safeToDate(q.deadline);
 
           const deadlineStr = deadline
             ? `${deadline.getFullYear()}/${deadline.getMonth() + 1}/${deadline.getDate()}`
             : "なし";
 
-          // 🔥 対象ペア名に変換
           const targetName =
             q.targetPair === "all"
               ? "全体"
