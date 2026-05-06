@@ -39,10 +39,7 @@ export default function QuestListPage() {
       );
       const pairSnap = await getDocs(pairQuery);
 
-      // 自分単体のペアは除外
-      const myPairIds = pairSnap.docs
-        .map((d) => d.id)
-        .filter((id) => id);
+      const myPairIds = pairSnap.docs.map((d) => d.id);
 
       // 🔥 Firestore の in 制限回避 → 全件取得
       const questsRef = collection(db, "quests");
@@ -85,11 +82,17 @@ export default function QuestListPage() {
     return q.status === statusTab;
   });
 
-  // 🔥 ソート
+  // 🔥 ソート（deadline が Timestamp でも string でも null でも安全）
   const sorted = [...filtered].sort((a, b) => {
     if (sortType === "deadline") {
-      const da = a.deadline ? a.deadline.toDate() : null;
-      const db = b.deadline ? b.deadline.toDate() : null;
+      const da =
+        a.deadline?.toDate?.() ??
+        (a.deadline ? new Date(a.deadline) : null);
+
+      const db =
+        b.deadline?.toDate?.() ??
+        (b.deadline ? new Date(b.deadline) : null);
+
       if (!da) return 1;
       if (!db) return -1;
       return da.getTime() - db.getTime();
@@ -103,7 +106,10 @@ export default function QuestListPage() {
   });
 
   const renderQuest = (quest: any) => {
-    const deadline = quest.deadline ? quest.deadline.toDate() : null;
+    const deadline =
+      quest.deadline?.toDate?.() ??
+      (quest.deadline ? new Date(quest.deadline) : null);
+
     const deadlineStr = deadline
       ? `${deadline.getMonth() + 1}/${deadline.getDate()}`
       : "なし";

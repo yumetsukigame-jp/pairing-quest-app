@@ -9,6 +9,7 @@ import {
   updateDoc,
   serverTimestamp,
 } from "firebase/firestore";
+import { onAuthStateChanged } from "firebase/auth";
 import Image from "next/image";
 
 export default function QuestDetailPage() {
@@ -16,10 +17,14 @@ export default function QuestDetailPage() {
   const router = useRouter();
 
   const [quest, setQuest] = useState<any>(null);
+  const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
+  // 🔥 ユーザー確定 & クエスト読み込み
   useEffect(() => {
-    const fetchQuest = async () => {
+    const unsub = onAuthStateChanged(auth, async (u) => {
+      setUser(u);
+
       const ref = doc(db, "quests", id as string);
       const snap = await getDoc(ref);
 
@@ -28,23 +33,29 @@ export default function QuestDetailPage() {
       }
 
       setLoading(false);
-    };
+    });
 
-    fetchQuest();
+    return () => unsub();
   }, [id]);
 
-  // 🔥 クエスト達成処理（executor をセット）
+  // 🔥 deadline を安全に変換（Timestamp / string / null すべて対応）
+  const getDeadline = () => {
+    if (!quest?.deadline) return null;
+
+    if (quest.deadline.toDate) {
+      return quest.deadline.toDate();
+    }
+
+    return new Date(quest.deadline);
+  };
+
+  // 🔥 クエスト達成処理
   const handleSuccess = async () => {
-    if (!quest) return;
+    if (!quest || !user) return;
 
-    const user = auth.currentUser;
-    if (!user) return;
-
-    const ref = doc(db, "quests", quest.id);
-
-    await updateDoc(ref, {
+    await updateDoc(doc(db, "quests", quest.id), {
       status: "success",
-      executor: user.uid, // ← ★ 実行者をセット
+      executor: user.uid,
       completedAt: serverTimestamp(),
     });
 
@@ -52,18 +63,13 @@ export default function QuestDetailPage() {
     router.push("/quests");
   };
 
-  // 🔥 クエスト不達成処理（executor をセット）
+  // 🔥 クエスト不達成処理
   const handleFail = async () => {
-    if (!quest) return;
+    if (!quest || !user) return;
 
-    const user = auth.currentUser;
-    if (!user) return;
-
-    const ref = doc(db, "quests", quest.id);
-
-    await updateDoc(ref, {
+    await updateDoc(doc(db, "quests", quest.id), {
       status: "failed",
-      executor: user.uid, // ← ★ 実行者をセット
+      executor: user.uid,
       failedAt: serverTimestamp(),
     });
 
@@ -87,7 +93,7 @@ export default function QuestDetailPage() {
     );
   }
 
-  const deadline = quest.deadline ? quest.deadline.toDate() : null;
+  const deadline = getDeadline();
   const deadlineStr = deadline
     ? `${deadline.getMonth() + 1}/${deadline.getDate()} ${deadline.getHours()}:${String(
         deadline.getMinutes()
@@ -118,8 +124,8 @@ export default function QuestDetailPage() {
       {/* タイトル */}
       <h2 className="text-xl font-semibold text-center">{quest.title}</h2>
 
-      {/* 説明 */}
-      <p className="text-slate-700 whitespace-pre-line">{quest.description}</p>
+      {/* 説明（detail に修正） */}
+      <p className="text-slate-700 whitespace-pre-line">{quest.detail}</p>
 
       {/* クエストタイプ */}
       <p className="text-sm text-slate-500">
@@ -129,9 +135,10 @@ export default function QuestDetailPage() {
       {/* 期限 */}
       <p className="text-sm text-slate-600">期限：{deadlineStr}</p>
 
-      {/* ポイント */}
+      {/* ポイント（point / pointsSuccess / pointsFail に対応） */}
       <p className="text-sm text-slate-600">
-        成功：+{quest.pointsSuccess}pt / 失敗：{quest.pointsFail}pt
+        成功：+{quest.pointsSuccess ?? quest.point ?? 0}pt / 失敗：
+        {quest.pointsFail ?? 0}pt
       </p>
 
       {/* ステータス */}
@@ -145,7 +152,7 @@ export default function QuestDetailPage() {
       </p>
 
       {/* ボタン（進行中のときだけ表示） */}
-      {quest.status === "pending" && (
+      {quest.status === "pending" && user && (
         <div className="space-y-4 mt-6">
           <button
             onClick={handleSuccess}
