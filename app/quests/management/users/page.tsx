@@ -4,12 +4,13 @@ import { useEffect, useState } from "react";
 import { db, auth } from "@/firebase";
 import {
   collection,
-  getDocs,
   doc,
   setDoc,
   updateDoc,
   query,
   where,
+  onSnapshot,
+  getDocs,
 } from "firebase/firestore";
 import Image from "next/image";
 import { onAuthStateChanged } from "firebase/auth";
@@ -24,10 +25,11 @@ export default function PairManagementPage() {
 
   const [loading, setLoading] = useState(true);
 
+  // 🔥 ログインチェック & 初期データ取得
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (user) => {
       if (!user) {
-        setLoading(false);
+        window.location.href = "/login";
         return;
       }
 
@@ -38,39 +40,41 @@ export default function PairManagementPage() {
       const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
       setUsers(list);
 
-      // 🔥 自分が関係する pairs を取得
+      // 🔥 pairs をリアルタイム購読
       const pq = query(
         collection(db, "pairs"),
         where("members", "array-contains", user.uid)
       );
-      const psnap = await getDocs(pq);
 
-      const active: any[] = [];
-      const received: any[] = [];
-      const sent: any[] = [];
+      const unsubPairs = onSnapshot(pq, (psnap) => {
+        const active: any[] = [];
+        const received: any[] = [];
+        const sent: any[] = [];
 
-      psnap.forEach((d) => {
-        const data = d.data();
-        const otherUid = data.members.find((m: string) => m !== user.uid);
+        psnap.forEach((d) => {
+          const data = d.data();
+          const otherUid = data.members.find((m: string) => m !== user.uid);
 
-        if (data.status === "active") {
-          active.push({ id: d.id, otherUid, ...data });
-        }
-
-        if (data.status === "pending") {
-          if (data.requester === user.uid) {
-            sent.push({ id: d.id, otherUid, ...data });
-          } else {
-            received.push({ id: d.id, otherUid, ...data });
+          if (data.status === "active") {
+            active.push({ id: d.id, otherUid, ...data });
           }
-        }
+
+          if (data.status === "pending") {
+            if (data.requester === user.uid) {
+              sent.push({ id: d.id, otherUid, ...data });
+            } else {
+              received.push({ id: d.id, otherUid, ...data });
+            }
+          }
+        });
+
+        setActivePairs(active);
+        setPendingReceived(received);
+        setPendingSent(sent);
+        setLoading(false);
       });
 
-      setActivePairs(active);
-      setPendingReceived(received);
-      setPendingSent(sent);
-
-      setLoading(false);
+      return () => unsubPairs();
     });
 
     return () => unsub();
@@ -107,13 +111,16 @@ export default function PairManagementPage() {
     alert("ペアが成立しました！");
   };
 
-  // 🔥 ペア解除
+  // 🔥 ペア解除（UI 即時更新 + Firestore 更新）
   const removePair = async (pairId: string) => {
     if (!confirm("ペアを解除しますか？")) return;
 
     await updateDoc(doc(db, "pairs", pairId), {
       status: "removed",
     });
+
+    // 🔥 UI 即時更新（onSnapshot でも反映されるが即時性のため）
+    setActivePairs((prev) => prev.filter((p) => p.id !== pairId));
 
     alert("ペアを解除しました");
   };
