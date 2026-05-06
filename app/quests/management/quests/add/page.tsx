@@ -35,7 +35,7 @@ export default function AddQuestPage() {
   // 🔥 アイコン一覧（統一）
   useEffect(() => {
     const loadIcons = async () => {
-      const res = await fetch("/api/rewards-images");
+      const res = await fetch("/api/questicons");
       const data = await res.json();
       setIconList(data);
     };

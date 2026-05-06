@@ -76,7 +76,7 @@ export default function EditQuestPage() {
       setPairList(pairs);
 
       // 🔥 アイコン一覧
-      const res = await fetch("/api/rewards-images");
+      const res = await fetch("/api/questicons");
       const icons = await res.json();
       setIconList(icons);
 
