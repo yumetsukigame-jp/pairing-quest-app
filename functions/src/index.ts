@@ -17,8 +17,6 @@ exports.checkQuestDeadlines = functions.pubsub
     const questsRef = db.collection("quests");
     const snapshot = await questsRef.where("status", "==", "pending").get();
 
-    const batch = db.batch();
-
     for (const docSnap of snapshot.docs) {
       const quest = docSnap.data();
       const questId = docSnap.id;
@@ -26,51 +24,42 @@ exports.checkQuestDeadlines = functions.pubsub
       const deadline = quest.deadline ? quest.deadline.toDate() : null;
       if (!deadline) continue;
 
-      if (deadline <= now) {
-        console.log(`期限切れクエスト: ${questId}`);
+      if (deadline > now) continue;
 
-        /**
-         * 🔥 非公開クエストはポイント処理しない
-         * → status を failed にするだけで終了
-         */
-        if (quest.isPublic === false) {
-          batch.update(docSnap.ref, {
-            status: "failed",
-            failedAt: admin.firestore.Timestamp.now(),
-          });
-          continue; // ← 次のクエストへ
-        }
+      console.log(`期限切れクエスト: ${questId}`);
 
-        /**
-         * 🔥 公開クエストだけ不達成ポイント処理
-         */
-        batch.update(docSnap.ref, {
+      // 🔥 非公開クエストはポイント処理しない → failed にするだけ
+      if (quest.isPublic === false) {
+        await docSnap.ref.update({
           status: "failed",
           failedAt: admin.firestore.Timestamp.now(),
         });
+        continue;
+      }
 
-        // executor が存在する場合のみ減点
-        if (quest.executor) {
-          await applyFailPoints(quest);
-        }
+      // 🔥 公開クエスト → 失敗ポイント処理
+      await docSnap.ref.update({
+        status: "failed",
+        failedAt: admin.firestore.Timestamp.now(),
+      });
 
-        /**
-         * デイリークエストの再配置
-         */
-        if (quest.questType === "daily") {
-          const nextDeadline = getNextDailyDeadline(quest.dailyResetTime);
+      if (quest.executor) {
+        await applyFailPoints(quest);
+      }
 
-          batch.update(docSnap.ref, {
-            status: "pending",
-            deadline: nextDeadline,
-          });
+      // 🔥 デイリークエストなら再配置（仕様：失敗扱い＋再配置）
+      if (quest.questType === "daily") {
+        const nextDeadline = getNextDailyDeadline(quest.dailyResetTime);
 
-          console.log(`デイリー再配置: ${questId}`);
-        }
+        await docSnap.ref.update({
+          status: "pending",
+          deadline: nextDeadline,
+        });
+
+        console.log(`デイリー再配置: ${questId}`);
       }
     }
 
-    await batch.commit();
     return null;
   });
 
@@ -88,7 +77,7 @@ async function applyFailPoints(quest: any) {
   const pairPointsSnap = await pairPointsRef.get();
   if (!pairPointsSnap.exists) return;
 
-  const pairPoints = pairPointsSnap.data();
+  const pairPoints = pairPointsSnap.data() || {};
   const current = pairPoints[executor] || { received: 0, given: 0 };
 
   await pairPointsRef.update({
@@ -105,7 +94,8 @@ async function applyFailPoints(quest: any) {
  * デイリークエストの次回期限を計算
  */
 function getNextDailyDeadline(timeStr: string) {
-  const [h, m] = timeStr.split(":").map(Number);
+  const safe = timeStr || "00:00";
+  const [h, m] = safe.split(":").map(Number);
 
   const next = new Date();
   next.setHours(h, m, 0, 0);
@@ -141,7 +131,7 @@ exports.onQuestSuccess = functions.firestore
       const pairPointsSnap = await pairPointsRef.get();
       if (!pairPointsSnap.exists) return;
 
-      const pairPoints = pairPointsSnap.data();
+      const pairPoints = pairPointsSnap.data() || {};
       const current = pairPoints[executor] || { received: 0, given: 0 };
 
       await pairPointsRef.update({

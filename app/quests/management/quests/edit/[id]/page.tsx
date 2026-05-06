@@ -21,11 +21,13 @@ export default function EditQuestPage() {
 
   const [title, setTitle] = useState("");
   const [detail, setDetail] = useState("");
-  const [point, setPoint] = useState("10"); // ← スマホ対策で文字列
+  const [point, setPoint] = useState("10");
   const [deadline, setDeadline] = useState("");
   const [isPublic, setIsPublic] = useState(true);
   const [targetPair, setTargetPair] = useState("all");
-  const [questType, setQuestType] = useState("normal"); // ← デイリー復活
+  const [questType, setQuestType] = useState("normal");
+
+  const [dailyResetTime, setDailyResetTime] = useState("00:00"); // ← 追加
 
   const [icon, setIcon] = useState("");
   const [icons, setIcons] = useState<string[]>([]);
@@ -96,7 +98,9 @@ export default function EditQuestPage() {
         setTitle(q.title);
         setDetail(q.detail);
         setPoint(String(q.point));
-        setQuestType(q.questType || "normal"); // ← デイリー復活
+        setQuestType(q.questType || "normal");
+
+        setDailyResetTime(q.dailyResetTime || "00:00"); // ← 読み込み
 
         if (q.deadline && q.deadline.toDate) {
           const d = q.deadline.toDate();
@@ -128,7 +132,8 @@ export default function EditQuestPage() {
       isPublic,
       icon,
       targetPair,
-      questType, // ← デイリー保存
+      questType,
+      dailyResetTime: questType === "daily" ? dailyResetTime : null, // ← 保存
     });
 
     alert("クエストを更新しました！");
@@ -223,7 +228,7 @@ export default function EditQuestPage() {
           className="w-full border p-2 rounded-lg"
         />
 
-        {/* 🔥 デイリー / 通常 */}
+        {/* クエストタイプ */}
         <label className="font-semibold">クエストタイプ</label>
         <select
           className="w-full border p-2 rounded-lg"
@@ -233,6 +238,19 @@ export default function EditQuestPage() {
           <option value="normal">通常クエスト</option>
           <option value="daily">デイリークエスト</option>
         </select>
+
+        {/* デイリーリセット時刻（デイリーのときだけ表示） */}
+        {questType === "daily" && (
+          <section>
+            <label className="font-semibold">デイリーリセット時刻</label>
+            <input
+              type="time"
+              className="w-full border p-2 rounded-lg mt-1"
+              value={dailyResetTime}
+              onChange={(e) => setDailyResetTime(e.target.value)}
+            />
+          </section>
+        )}
 
         <label className="font-semibold flex items-center gap-2">
           <input

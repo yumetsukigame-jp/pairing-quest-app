@@ -20,10 +20,12 @@ export default function AddQuestPage() {
 
   const [title, setTitle] = useState("");
   const [detail, setDetail] = useState("");
-  const [point, setPoint] = useState("10"); // ← スマホ対策で文字列
+  const [point, setPoint] = useState("10");
   const [deadline, setDeadline] = useState("");
   const [isPublic, setIsPublic] = useState(true);
-  const [questType, setQuestType] = useState("normal"); // ← デイリー追加
+  const [questType, setQuestType] = useState("normal");
+
+  const [dailyResetTime, setDailyResetTime] = useState("00:00"); // ← 追加
 
   const [iconList, setIconList] = useState<string[]>([]);
   const [icon, setIcon] = useState<string | null>(null);
@@ -41,7 +43,7 @@ export default function AddQuestPage() {
     loadIcons();
   }, []);
 
-  // 🔥 ペア一覧取得
+  // 🔥 ペア一覧
   useEffect(() => {
     const loadPairs = async () => {
       const user = auth.currentUser;
@@ -104,7 +106,8 @@ export default function AddQuestPage() {
       isPublic,
       icon: icon || null,
       targetPair,
-      questType, // ← デイリー保存
+      questType,
+      dailyResetTime: questType === "daily" ? dailyResetTime : null, // ← 追加
       createdBy: user.uid,
       createdAt: serverTimestamp(),
       status: "pending",
@@ -117,7 +120,7 @@ export default function AddQuestPage() {
     <div className="max-w-xl mx-auto p-6 space-y-8">
       <h1 className="text-2xl font-bold text-center">クエストを追加</h1>
 
-      {/* アイコン選択 */}
+      {/* アイコン */}
       <section className="space-y-3">
         <h2 className="text-lg font-semibold">アイコン</h2>
 
@@ -187,10 +190,10 @@ export default function AddQuestPage() {
           type="number"
           className="w-full border p-2 rounded mt-1"
           value={point}
-          onChange={(e) => setPoint(e.target.value)} // ← 文字列保持
+          onChange={(e) => setPoint(e.target.value)}
           onBlur={(e) => {
             const num = parseInt(e.target.value, 10);
-            setPoint(isNaN(num) ? "0" : String(num)); // ← 0100 → 100
+            setPoint(isNaN(num) ? "0" : String(num));
           }}
         />
       </section>
@@ -218,6 +221,19 @@ export default function AddQuestPage() {
           <option value="daily">デイリークエスト</option>
         </select>
       </section>
+
+      {/* デイリーリセット時刻（デイリーのときだけ表示） */}
+      {questType === "daily" && (
+        <section>
+          <label className="font-semibold">デイリーリセット時刻</label>
+          <input
+            type="time"
+            className="w-full border p-2 rounded mt-1"
+            value={dailyResetTime}
+            onChange={(e) => setDailyResetTime(e.target.value)}
+          />
+        </section>
+      )}
 
       {/* 公開設定 */}
       <section>
