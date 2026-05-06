@@ -21,10 +21,11 @@ export default function EditQuestPage() {
 
   const [title, setTitle] = useState("");
   const [detail, setDetail] = useState("");
-  const [point, setPoint] = useState("10"); // ← 文字列で保持（スマホ対策）
+  const [point, setPoint] = useState("10"); // ← スマホ対策で文字列
   const [deadline, setDeadline] = useState("");
   const [isPublic, setIsPublic] = useState(true);
   const [targetPair, setTargetPair] = useState("all");
+  const [questType, setQuestType] = useState("normal"); // ← デイリー復活
 
   const [icon, setIcon] = useState("");
   const [icons, setIcons] = useState<string[]>([]);
@@ -94,7 +95,8 @@ export default function EditQuestPage() {
 
         setTitle(q.title);
         setDetail(q.detail);
-        setPoint(String(q.point)); // ← 文字列としてセット
+        setPoint(String(q.point));
+        setQuestType(q.questType || "normal"); // ← デイリー復活
 
         if (q.deadline && q.deadline.toDate) {
           const d = q.deadline.toDate();
@@ -126,10 +128,10 @@ export default function EditQuestPage() {
       isPublic,
       icon,
       targetPair,
+      questType, // ← デイリー保存
     });
 
     alert("クエストを更新しました！");
-
     await router.push("/quests/management/quests");
   };
 
@@ -205,10 +207,10 @@ export default function EditQuestPage() {
         <input
           type="number"
           value={point}
-          onChange={(e) => setPoint(e.target.value)} // ← 文字列で保持
+          onChange={(e) => setPoint(e.target.value)}
           onBlur={(e) => {
             const num = parseInt(e.target.value, 10);
-            setPoint(isNaN(num) ? "0" : String(num)); // ← 先頭の0を除去
+            setPoint(isNaN(num) ? "0" : String(num));
           }}
           className="w-full border p-2 rounded-lg"
         />
@@ -220,6 +222,17 @@ export default function EditQuestPage() {
           onChange={(e) => setDeadline(e.target.value)}
           className="w-full border p-2 rounded-lg"
         />
+
+        {/* 🔥 デイリー / 通常 */}
+        <label className="font-semibold">クエストタイプ</label>
+        <select
+          className="w-full border p-2 rounded-lg"
+          value={questType}
+          onChange={(e) => setQuestType(e.target.value)}
+        >
+          <option value="normal">通常クエスト</option>
+          <option value="daily">デイリークエスト</option>
+        </select>
 
         <label className="font-semibold flex items-center gap-2">
           <input

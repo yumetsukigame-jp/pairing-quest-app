@@ -15,10 +15,27 @@ import Image from "next/image";
 
 export default function QuestManagementListPage() {
   const [quests, setQuests] = useState<any[]>([]);
+  const [pairNames, setPairNames] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
 
+  // 🔥 ペアID → 名前の辞書を作る
+  const loadPairNames = async () => {
+    const snap = await getDocs(collection(db, "pairs"));
+    const map: Record<string, string> = {};
+
+    for (const d of snap.docs) {
+      const data = d.data();
+      const names = data.names || data.memberNames || []; // どちらでも対応
+      map[d.id] = names.join(" & ");
+    }
+
+    setPairNames(map);
+  };
+
   useEffect(() => {
-    const loadQuests = async () => {
+    const load = async () => {
+      await loadPairNames();
+
       const q = query(collection(db, "quests"), orderBy("createdAt", "desc"));
       const snap = await getDocs(q);
 
@@ -31,7 +48,7 @@ export default function QuestManagementListPage() {
       setLoading(false);
     };
 
-    loadQuests();
+    load();
   }, []);
 
   const deleteQuest = async (id: string) => {
@@ -78,6 +95,12 @@ export default function QuestManagementListPage() {
             ? `${deadline.getFullYear()}/${deadline.getMonth() + 1}/${deadline.getDate()}`
             : "なし";
 
+          // 🔥 対象ペア名に変換
+          const targetName =
+            q.targetPair === "all"
+              ? "全体"
+              : pairNames[q.targetPair] || "不明なペア";
+
           return (
             <div
               key={q.id}
@@ -100,9 +123,7 @@ export default function QuestManagementListPage() {
               <div className="flex-1">
                 <p className="font-semibold">{q.title}</p>
                 <p className="text-xs text-slate-500">期限：{deadlineStr}</p>
-                <p className="text-xs text-slate-500">
-                  対象：{q.targetPair === "all" ? "全体" : q.targetPair}
-                </p>
+                <p className="text-xs text-slate-500">対象：{targetName}</p>
               </div>
 
               <div className="flex flex-col gap-2">

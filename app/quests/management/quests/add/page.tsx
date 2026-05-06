@@ -18,19 +18,20 @@ import Image from "next/image";
 export default function AddQuestPage() {
   const router = useRouter();
 
-  const [name, setName] = useState("");
+  const [title, setTitle] = useState("");
   const [detail, setDetail] = useState("");
-  const [point, setPoint] = useState<number>(10);
+  const [point, setPoint] = useState("10"); // ← スマホ対策で文字列
   const [deadline, setDeadline] = useState("");
   const [isPublic, setIsPublic] = useState(true);
+  const [questType, setQuestType] = useState("normal"); // ← デイリー追加
 
   const [iconList, setIconList] = useState<string[]>([]);
   const [icon, setIcon] = useState<string | null>(null);
 
   const [pairs, setPairs] = useState<any[]>([]);
-  const [executor, setExecutor] = useState<string>("all");
+  const [targetPair, setTargetPair] = useState<string>("all");
 
-  // 🔥 アイコン一覧を public/questicon から取得
+  // 🔥 アイコン一覧
   useEffect(() => {
     const loadIcons = async () => {
       const res = await fetch("/questicon/list.json");
@@ -40,7 +41,7 @@ export default function AddQuestPage() {
     loadIcons();
   }, []);
 
-  // 🔥 ペア一覧を取得（pairs → members → users.name）
+  // 🔥 ペア一覧取得
   useEffect(() => {
     const loadPairs = async () => {
       const user = auth.currentUser;
@@ -85,7 +86,7 @@ export default function AddQuestPage() {
 
   // 🔥 クエスト作成
   const handleSubmit = async () => {
-    if (!name.trim()) {
+    if (!title.trim()) {
       alert("クエスト名を入力してください");
       return;
     }
@@ -93,20 +94,23 @@ export default function AddQuestPage() {
     const user = auth.currentUser;
     if (!user) return;
 
+    const numericPoint = parseInt(point, 10) || 0;
+
     await addDoc(collection(db, "quests"), {
-      name,
+      title,
       detail,
-      point,
+      point: numericPoint,
       deadline: deadline || null,
       isPublic,
       icon: icon || null,
-      executor,
+      targetPair,
+      questType, // ← デイリー保存
       createdBy: user.uid,
       createdAt: serverTimestamp(),
-      status: "open",
+      status: "pending",
     });
 
-    router.push("/quests/management");
+    router.push("/quests/management/quests");
   };
 
   return (
@@ -160,8 +164,8 @@ export default function AddQuestPage() {
         <input
           type="text"
           className="w-full border p-2 rounded mt-1"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
         />
       </section>
 
@@ -183,7 +187,11 @@ export default function AddQuestPage() {
           type="number"
           className="w-full border p-2 rounded mt-1"
           value={point}
-          onChange={(e) => setPoint(Number(e.target.value))}
+          onChange={(e) => setPoint(e.target.value)} // ← 文字列保持
+          onBlur={(e) => {
+            const num = parseInt(e.target.value, 10);
+            setPoint(isNaN(num) ? "0" : String(num)); // ← 0100 → 100
+          }}
         />
       </section>
 
@@ -196,6 +204,19 @@ export default function AddQuestPage() {
           value={deadline}
           onChange={(e) => setDeadline(e.target.value)}
         />
+      </section>
+
+      {/* クエストタイプ */}
+      <section>
+        <label className="font-semibold">クエストタイプ</label>
+        <select
+          className="w-full border p-2 rounded mt-1"
+          value={questType}
+          onChange={(e) => setQuestType(e.target.value)}
+        >
+          <option value="normal">通常クエスト</option>
+          <option value="daily">デイリークエスト</option>
+        </select>
       </section>
 
       {/* 公開設定 */}
@@ -211,15 +232,15 @@ export default function AddQuestPage() {
         </select>
       </section>
 
-      {/* 実行者（ペア選択） */}
+      {/* 対象ペア */}
       <section>
         <label className="font-semibold">対象ペア</label>
         <select
           className="w-full border p-2 rounded mt-1"
-          value={executor}
-          onChange={(e) => setExecutor(e.target.value)}
+          value={targetPair}
+          onChange={(e) => setTargetPair(e.target.value)}
         >
-          <option value="all">ペア全体</option>
+          <option value="all">全体</option>
 
           {pairs.map((p) => (
             <option key={p.pairId} value={p.pairId}>
