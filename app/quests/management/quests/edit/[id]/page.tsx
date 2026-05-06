@@ -45,7 +45,7 @@ export default function EditQuestPage() {
     loadIcons();
   }, []);
 
-  // 🔥 ペア一覧（UID → 名前変換）
+  // 🔥 ペア一覧（自分単体のペアを除外）
   useEffect(() => {
     const loadPairs = async () => {
       const user = auth.currentUser;
@@ -63,6 +63,9 @@ export default function EditQuestPage() {
         const pairId = docSnap.id;
         const data = docSnap.data();
         const memberUids: string[] = data.members || [];
+
+        // 🔥 自分だけのペアは除外
+        if (memberUids.length < 2) continue;
 
         const names: string[] = [];
 
