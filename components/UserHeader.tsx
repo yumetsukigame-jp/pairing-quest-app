@@ -5,15 +5,15 @@ import Image from "next/image";
 
 export default function UserHeader() {
   return (
-    <header className="w-full">
+    <header className="w-full relative z-50">
       <Link href="/" className="block">
         <Image
           src="/header.webp"
           alt="ゆめつきの書斎 ヘッダー"
           width={1200}
           height={300}
-          className="w-full h-auto object-contain cursor-pointer block"
           priority
+          className="w-full h-auto object-contain cursor-pointer block pointer-events-auto"
         />
       </Link>
     </header>
