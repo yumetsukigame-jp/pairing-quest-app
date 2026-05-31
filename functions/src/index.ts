@@ -41,6 +41,7 @@ export const checkQuestDeadlines = onSchedule(
       });
 
       // ② ペア指定クエストのみ失敗ポイント付与
+      //   （全体クエストは失敗時ポイント移動なし）
       if (quest.targetPair !== "all" && quest.executor) {
         await applyFailPoints(quest);
       }
@@ -59,35 +60,56 @@ export const checkQuestDeadlines = onSchedule(
       }
     }
 
-    // ※ v2 API では return null を書かないこと！
+    // v2 API では return null は不要
   }
 );
 
 /**
- * 不達成ポイントを実行者に付与（ペア指定クエストのみ）
+ * クエスト失敗時のポイント移動
+ * 仕様：
+ * - ペア指定クエストのみポイント移動
+ * - 失敗者（executor） → 設定者（creator）にポイントが動く
+ *   - executor.given   += pointsFail
+ *   - creator.received += pointsFail
+ * - 全体クエスト（targetPair === "all"）は失敗時ポイント移動なし
  */
 async function applyFailPoints(quest: any) {
   const pairId = quest.targetPair;
   const executor = quest.executor;
+  const creator = quest.createdBy;
   const pointsFail = quest.pointsFail || 0;
 
-  if (!pairId || !executor) return;
+  // 全体クエストは失敗時のみポイント移動なし
+  if (!pairId || pairId === "all") return;
+  if (!executor || !creator) return;
 
   const pairPointsRef = db.collection("pairPoints").doc(pairId);
   const pairPointsSnap = await pairPointsRef.get();
   if (!pairPointsSnap.exists) return;
 
   const pairPoints = pairPointsSnap.data() || {};
-  const current = pairPoints[executor] || { received: 0, given: 0 };
+
+  const execCurrent =
+    pairPoints[executor] || { received: 0, given: 0 };
+  const creatorCurrent =
+    pairPoints[creator] || { received: 0, given: 0 };
 
   await pairPointsRef.update({
+    // 失敗者 → あげた（given）が増える
     [executor]: {
-      received: current.received + pointsFail,
-      given: current.given,
+      received: execCurrent.received,
+      given: execCurrent.given + pointsFail,
+    },
+    // 設定者 → もらった（received）が増える
+    [creator]: {
+      received: creatorCurrent.received + pointsFail,
+      given: creatorCurrent.given,
     },
   });
 
-  console.log(`不達成ポイント ${pointsFail} を実行者 ${executor} に付与しました`);
+  console.log(
+    `失敗ポイント ${pointsFail}pt: executor(${executor}) → creator(${creator})`
+  );
 }
 
 /**
@@ -108,7 +130,12 @@ function getNextDailyDeadline(timeStr: string) {
 }
 
 /**
- * クエスト達成時にポイント付与（実行者に付与）
+ * クエスト達成時にポイント付与
+ * 仕様：
+ * - 成功時は全体クエストでもポイント移動する
+ * - 設定者（creator） → 実行者（executor）にポイントが動く
+ *   - executor.received += pointsSuccess
+ *   - creator.given    += pointsSuccess
  */
 export const onQuestSuccess = onDocumentUpdated(
   {
@@ -122,31 +149,47 @@ export const onQuestSuccess = onDocumentUpdated(
     if (!before || !after) return;
 
     // pending → success のときのみ実行
-    if (before.status === "pending" && after.status === "success") {
-      console.log(`クエスト達成: ${event.params.questId}`);
-
-      const quest = after;
-      const pairId = quest.targetPair;
-      const executor = quest.executor;
-      const points = quest.pointsSuccess || 0;
-
-      if (!pairId || !executor) return;
-
-      const pairPointsRef = db.collection("pairPoints").doc(pairId);
-      const pairPointsSnap = await pairPointsRef.get();
-      if (!pairPointsSnap.exists) return;
-
-      const pairPoints = pairPointsSnap.data() || {};
-      const current = pairPoints[executor] || { received: 0, given: 0 };
-
-      await pairPointsRef.update({
-        [executor]: {
-          received: current.received + points,
-          given: current.given,
-        },
-      });
-
-      console.log(`達成ポイント +${points}pt を実行者 ${executor} に付与しました`);
+    if (!(before.status === "pending" && after.status === "success")) {
+      return;
     }
+
+    console.log(`クエスト達成: ${event.params.questId}`);
+
+    const quest = after;
+    const pairId = quest.targetPair;
+    const executor = quest.executor;
+    const creator = quest.createdBy;
+    const points = quest.pointsSuccess || 0;
+
+    // 成功時は全体クエストでもポイント移動する
+    if (!pairId || !executor || !creator) return;
+
+    const pairPointsRef = db.collection("pairPoints").doc(pairId);
+    const pairPointsSnap = await pairPointsRef.get();
+    if (!pairPointsSnap.exists) return;
+
+    const pairPoints = pairPointsSnap.data() || {};
+
+    const execCurrent =
+      pairPoints[executor] || { received: 0, given: 0 };
+    const creatorCurrent =
+      pairPoints[creator] || { received: 0, given: 0 };
+
+    await pairPointsRef.update({
+      // 実行者 → もらった（received）が増える
+      [executor]: {
+        received: execCurrent.received + points,
+        given: execCurrent.given,
+      },
+      // 設定者 → あげた（given）が増える
+      [creator]: {
+        received: creatorCurrent.received,
+        given: creatorCurrent.given + points,
+      },
+    });
+
+    console.log(
+      `成功ポイント ${points}pt: creator(${creator}) → executor(${executor})`
+    );
   }
 );
