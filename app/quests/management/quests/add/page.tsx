@@ -13,6 +13,7 @@ import {
   where,
   Timestamp,
 } from "firebase/firestore";
+import { onAuthStateChanged } from "firebase/auth";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 
@@ -42,10 +43,9 @@ export default function AddQuestPage() {
     loadIcons();
   }, []);
 
-  // 🔥 ペア一覧
+  // 🔥 ペア一覧（auth 状態が確定してから読み込む）
   useEffect(() => {
-    const loadPairs = async () => {
-      const user = auth.currentUser;
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (!user) return;
 
       const q = query(
@@ -82,9 +82,9 @@ export default function AddQuestPage() {
       }
 
       setPairs(list);
-    };
+    });
 
-    loadPairs();
+    return () => unsubscribe();
   }, []);
 
   // 🔥 クエスト作成
@@ -117,7 +117,6 @@ export default function AddQuestPage() {
       createdAt: serverTimestamp(),
       status: "pending",
 
-      // 🔥 これがないと executor が壊れる
       executor: null,
     });
 
