@@ -45,14 +45,16 @@ export default function HomePage() {
       const userInfo = userSnap.data();
       setUserData(userInfo);
 
-      // 🔥 ペア情報の読み込み
+      // 🔥 自分が所属するペア一覧を取得
       const pq = query(
         collection(db, "pairs"),
         where("members", "array-contains", user.uid),
         where("status", "==", "active")
       );
-
       const psnap = await getDocs(pq);
+
+      // 🔥 全 pairPoints を取得（相手の総ポイント計算用）
+      const allPairPointsSnap = await getDocs(collection(db, "pairPoints"));
 
       const pairsData: any[] = [];
       let total = 0;
@@ -61,7 +63,7 @@ export default function HomePage() {
         const pairId = docSnap.id;
         const pairInfo = docSnap.data();
 
-        // 🔥 pairPoints 読み込み
+        // 🔥 このペアの pairPoints を取得
         const ppRef = doc(db, "pairPoints", pairId);
         const ppSnap = await getDoc(ppRef);
         if (!ppSnap.exists()) continue;
@@ -73,12 +75,19 @@ export default function HomePage() {
 
         // 🔥 相手の UID
         const otherUid = pairInfo.members.find((m: string) => m !== user.uid);
+        if (!otherUid) continue;
 
-        // 🔥 相手のポイント
-        const other = pp[otherUid] || { received: 0, given: 0 };
-
-        // 🔥 総ポイント = 相手の（全ペアの）あげた＋もらった
-        total += (other.received + other.given);
+        // 🔥 相手の総ポイント（全 pairPoints から集計）
+        let otherTotal = 0;
+        allPairPointsSnap.forEach((p) => {
+          const data = p.data();
+          const other = data[otherUid];
+          if (other) {
+            const r = typeof other.received === "number" ? other.received : 0;
+            const g = typeof other.given === "number" ? other.given : 0;
+            otherTotal += r + g;
+          }
+        });
 
         // 🔥 相手ユーザー情報取得
         const otherUserRef = doc(db, "users", otherUid);
@@ -106,8 +115,11 @@ export default function HomePage() {
           otherIcon,
           myReceived: myPoints.received,
           myGiven: myPoints.given,
-          otherPoints: other.received + other.given, // ← 相手の総ポイント
+          otherPoints: otherTotal, // ← 相手の全ペア合計
         });
+
+        // 🔥 画面上部の「総ポイント」にも加算
+        total += otherTotal;
       }
 
       setPairList(pairsData);
