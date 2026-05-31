@@ -57,7 +57,7 @@ export default function HomePage() {
       const allPairPointsSnap = await getDocs(collection(db, "pairPoints"));
 
       const pairsData: any[] = [];
-      let total = 0;
+      let total = 0; // ← 自分の received の合計にする
 
       for (const docSnap of psnap.docs) {
         const pairId = docSnap.id;
@@ -72,6 +72,9 @@ export default function HomePage() {
 
         // 🔥 自分のポイント
         const myPoints = pp[user.uid] || { received: 0, given: 0 };
+
+        // 🔥 自分の総ポイント（received の合計）
+        total += myPoints.received;
 
         // 🔥 相手の UID
         const otherUid = pairInfo.members.find((m: string) => m !== user.uid);
@@ -117,13 +120,10 @@ export default function HomePage() {
           myGiven: myPoints.given,
           otherPoints: otherTotal, // ← 相手の全ペア合計
         });
-
-        // 🔥 画面上部の「総ポイント」にも加算
-        total += otherTotal;
       }
 
       setPairList(pairsData);
-      setTotalPoints(total);
+      setTotalPoints(total); // ← 自分の received 合計
       setLoading(false);
     });
 
