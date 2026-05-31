@@ -32,7 +32,7 @@ export default function AddQuestPage() {
   const [pairs, setPairs] = useState<any[]>([]);
   const [targetPair, setTargetPair] = useState<string>("all");
 
-  // 🔥 アイコン一覧（統一）
+  // 🔥 アイコン一覧
   useEffect(() => {
     const loadIcons = async () => {
       const res = await fetch("/api/questicons");
@@ -42,7 +42,7 @@ export default function AddQuestPage() {
     loadIcons();
   }, []);
 
-  // 🔥 ペア一覧（自分単体のペアを除外）
+  // 🔥 ペア一覧
   useEffect(() => {
     const loadPairs = async () => {
       const user = auth.currentUser;
@@ -106,7 +106,6 @@ export default function AddQuestPage() {
       pointsSuccess: numericPoint,
       pointsFail: 0,
 
-      // 🔥 Firestore Timestamp で保存（重要）
       deadline: deadline ? Timestamp.fromDate(new Date(deadline)) : null,
 
       icon: icon || null,
@@ -117,6 +116,9 @@ export default function AddQuestPage() {
       createdBy: user.uid,
       createdAt: serverTimestamp(),
       status: "pending",
+
+      // 🔥 これがないと executor が壊れる
+      executor: null,
     });
 
     router.push("/quests/management/quests");

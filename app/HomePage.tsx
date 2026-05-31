@@ -28,7 +28,6 @@ export default function HomePage() {
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (user) => {
-      // 🔥 未ログイン → /login にリダイレクト
       if (!user) {
         window.location.href = "/login";
         return;
@@ -68,12 +67,20 @@ export default function HomePage() {
         if (!ppSnap.exists()) continue;
 
         const pp = ppSnap.data();
+
+        // 🔥 自分のポイント
         const myPoints = pp[user.uid] || { received: 0, given: 0 };
 
-        total += myPoints.received;
+        // 🔥 相手の UID
+        const otherUid = pairInfo.members.find((m: string) => m !== user.uid);
+
+        // 🔥 相手のポイント
+        const other = pp[otherUid] || { received: 0, given: 0 };
+
+        // 🔥 総ポイント = 相手の（全ペアの）あげた＋もらった
+        total += (other.received + other.given);
 
         // 🔥 相手ユーザー情報取得
-        const otherUid = pairInfo.members.find((m: string) => m !== user.uid);
         const otherUserRef = doc(db, "users", otherUid);
         const otherUserSnap = await getDoc(otherUserRef);
 
@@ -92,8 +99,6 @@ export default function HomePage() {
           }
         }
 
-        const otherPoints = pp[otherUid]?.received ?? 0;
-
         pairsData.push({
           pairId,
           otherUid,
@@ -101,7 +106,7 @@ export default function HomePage() {
           otherIcon,
           myReceived: myPoints.received,
           myGiven: myPoints.given,
-          otherPoints,
+          otherPoints: other.received + other.given, // ← 相手の総ポイント
         });
       }
 
