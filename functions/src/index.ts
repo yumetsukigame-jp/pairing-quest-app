@@ -1,4 +1,5 @@
-import * as functions from "firebase-functions";
+import { onSchedule } from "firebase-functions/v2/scheduler";
+import { onDocumentUpdated } from "firebase-functions/v2/firestore";
 import * as admin from "firebase-admin";
 
 admin.initializeApp();
@@ -8,10 +9,13 @@ const db = admin.firestore();
  * 毎分実行されるスケジュールタスク
  * 期限切れクエストの処理 & デイリークエストの再配置
  */
-exports.checkQuestDeadlines = functions.pubsub
-  .schedule("every 1 minutes")
-  .timeZone("Asia/Tokyo")
-  .onRun(async () => {
+export const checkQuestDeadlines = onSchedule(
+  {
+    schedule: "every 1 minutes",
+    timeZone: "Asia/Tokyo",
+    region: "us-central1",
+  },
+  async () => {
     const now = new Date();
 
     const questsRef = db.collection("quests");
@@ -29,25 +33,19 @@ exports.checkQuestDeadlines = functions.pubsub
 
       console.log(`期限切れクエスト: ${questId}`);
 
-      // ============================
-      // ① まず failed にする（デイリーも通常も）
-      // ============================
+      // ① failed にする
       await docSnap.ref.update({
         status: "failed",
         executor: null,
         failedAt: admin.firestore.Timestamp.now(),
       });
 
-      // ============================
       // ② ペア指定クエストのみ失敗ポイント付与
-      // ============================
       if (quest.targetPair !== "all" && quest.executor) {
         await applyFailPoints(quest);
       }
 
-      // ============================
-      // ③ デイリークエストは再配置（翌日の deadline）
-      // ============================
+      // ③ デイリークエストは再配置
       if (quest.questType === "daily") {
         const nextDeadline = getNextDailyDeadline(quest.dailyResetTime);
 
@@ -61,8 +59,9 @@ exports.checkQuestDeadlines = functions.pubsub
       }
     }
 
-    return null;
-  });
+    // ※ v2 API では return null を書かないこと！
+  }
+);
 
 /**
  * 不達成ポイントを実行者に付与（ペア指定クエストのみ）
@@ -111,15 +110,20 @@ function getNextDailyDeadline(timeStr: string) {
 /**
  * クエスト達成時にポイント付与（実行者に付与）
  */
-exports.onQuestSuccess = functions.firestore
-  .document("quests/{questId}")
-  .onUpdate(async (change, context) => {
-    const before = change.before.data();
-    const after = change.after.data();
+export const onQuestSuccess = onDocumentUpdated(
+  {
+    document: "quests/{questId}",
+    region: "us-central1",
+  },
+  async (event) => {
+    const before = event.data?.before.data();
+    const after = event.data?.after.data();
+
+    if (!before || !after) return;
 
     // pending → success のときのみ実行
     if (before.status === "pending" && after.status === "success") {
-      console.log(`クエスト達成: ${context.params.questId}`);
+      console.log(`クエスト達成: ${event.params.questId}`);
 
       const quest = after;
       const pairId = quest.targetPair;
@@ -144,4 +148,5 @@ exports.onQuestSuccess = functions.firestore
 
       console.log(`達成ポイント +${points}pt を実行者 ${executor} に付与しました`);
     }
-  });
+  }
+);
